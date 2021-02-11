@@ -1,8 +1,11 @@
 from deemix.app.downloadjob import DownloadJob
 from deemix.utils import getIDFromLink, getTypeFromLink, getBitrateInt
+
+from deezer import Deezer
 from deezer.gw import APIError as gwAPIError, LyricsStatus
 from deezer.api import APIError
 from deezer.utils import map_user_playlist
+
 from spotipy.exceptions import SpotifyException
 from deemix.app.queueitem import QueueItem, QISingle, QICollection, QIConvertable
 import logging
@@ -16,14 +19,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('deemix')
 
 class QueueManager:
-    def __init__(self, spotifyHelper=None):
+    def __init__(self, deezerHelper=None, spotifyHelper=None):
         self.queue = []
         self.queueList = {}
         self.queueComplete = []
         self.currentItem = ""
+        self.dz = deezerHelper or Deezer()
         self.sp = spotifyHelper
 
-    def generateTrackQueueItem(self, dz, id, settings, bitrate, trackAPI=None, albumAPI=None):
+    def generateTrackQueueItem(self, id, settings, bitrate, trackAPI=None, albumAPI=None, dz=None):
+        if not dz: dz = self.dz
         # Check if is an isrc: url
         if str(id).startswith("isrc"):
             try:
@@ -72,7 +77,8 @@ class QueueManager:
             single=trackAPI_gw,
         )
 
-    def generateAlbumQueueItem(self, dz, id, settings, bitrate, rootArtist=None):
+    def generateAlbumQueueItem(self, id, settings, bitrate, rootArtist=None, dz=None):
+        if not dz: dz = self.dz
         # Get essential album info
         try:
             albumAPI = dz.api.get_album(id)
@@ -125,7 +131,8 @@ class QueueManager:
             collection=collection,
         )
 
-    def generatePlaylistQueueItem(self, dz, id, settings, bitrate):
+    def generatePlaylistQueueItem(self, id, settings, bitrate, dz=None):
+        if not dz: dz = self.dz
         # Get essential playlist info
         try:
             playlistAPI = dz.api.get_playlist(id)
@@ -178,7 +185,8 @@ class QueueManager:
             collection=collection,
         )
 
-    def generateArtistQueueItem(self, dz, id, settings, bitrate, interface=None):
+    def generateArtistQueueItem(self, id, settings, bitrate, dz=None, interface=None):
+        if not dz: dz = self.dz
         # Get essential artist info
         try:
             artistAPI = dz.api.get_artist(id)
@@ -201,7 +209,8 @@ class QueueManager:
         if interface: interface.send("finishAddingArtist", {'name': artistAPI['name'], 'id': artistAPI['id']})
         return albumList
 
-    def generateArtistDiscographyQueueItem(self, dz, id, settings, bitrate, interface=None):
+    def generateArtistDiscographyQueueItem(self, id, settings, bitrate, dz=None, interface=None):
+        if not dz: dz = self.dz
         # Get essential artist info
         try:
             artistAPI = dz.api.get_artist(id)
@@ -225,7 +234,8 @@ class QueueManager:
         if interface: interface.send("finishAddingArtist", {'name': artistAPI['name'], 'id': artistAPI['id']})
         return albumList
 
-    def generateArtistTopQueueItem(self, dz, id, settings, bitrate, interface=None):
+    def generateArtistTopQueueItem(self, id, settings, bitrate, dz=None, interface=None):
+        if not dz: dz = self.dz
         # Get essential artist info
         try:
             artistAPI = dz.api.get_artist(id)
@@ -293,7 +303,8 @@ class QueueManager:
             collection=collection,
         )
 
-    def generateQueueItem(self, dz, url, settings, bitrate=None, interface=None):
+    def generateQueueItem(self, url, settings, bitrate=None, dz=None, interface=None):
+        if not dz: dz = self.dz
         bitrate = getBitrateInt(bitrate) or settings['maxBitrate']
         if 'deezer.page.link' in url: url = urlopen(url).url
         if 'link.tospotify.com' in url: url = urlopen(url).url
@@ -359,7 +370,9 @@ class QueueManager:
         logger.warn("URL not supported yet")
         return QueueError(url, "URL not supported yet", "unsupportedURL")
 
-    def addToQueue(self, dz, url, settings, bitrate=None, interface=None, ack=None):
+    def addToQueue(self, url, settings, bitrate=None, dz=None, interface=None, ack=None):
+        if not dz: dz = self.dz
+
         if not dz.logged_in:
             if interface: interface.send("loginNeededToDownload")
             return False
@@ -430,7 +443,8 @@ class QueueManager:
         self.nextItem(dz, interface)
         return True
 
-    def nextItem(self, dz, interface=None):
+    def nextItem(self, dz=None, interface=None):
+        if not dz: dz = self.dz
         # Check that nothing is already downloading and
         # that the queue is not empty
         if self.currentItem != "": return None

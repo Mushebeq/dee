@@ -1,6 +1,5 @@
 import requests
-get = requests.get
-request_exception = requests.exceptions
+from requests import get
 
 from concurrent.futures import ThreadPoolExecutor
 from time import sleep
@@ -68,7 +67,7 @@ def downloadImage(url, path, overwrite=OverwriteOption.DONT_OVERWRITE):
             with open(path, 'wb') as f:
                 f.write(image.content)
             return path
-        except request_exception.HTTPError:
+        except requests.exceptions.HTTPError:
             if 'cdns-images.dzcdn.net' in url:
                 urlBase = url[:url.rfind("/")+1]
                 pictureUrl = url[len(urlBase):]
@@ -78,7 +77,7 @@ def downloadImage(url, path, overwrite=OverwriteOption.DONT_OVERWRITE):
                     sleep(1)
                     return  downloadImage(urlBase+pictureUrl.replace(str(pictureSize)+"x"+str(pictureSize), '1200x1200'), path, overwrite)
             logger.error("Image not found: "+url)
-        except (request_exception.ConnectionError, request_exception.ChunkedEncodingError, u3SSLError) as e:
+        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, u3SSLError) as e:
             logger.error("Couldn't download Image, retrying in 5 seconds...: "+url+"\n")
             sleep(5)
             return downloadImage(url, path, overwrite)
@@ -492,7 +491,7 @@ class DownloadJob:
                 except DownloadCancelled:
                     if writepath.is_file(): writepath.unlink()
                     raise DownloadCancelled
-                except (request_exception.HTTPError, DownloadEmpty):
+                except (requests.exceptions.HTTPError, DownloadEmpty):
                     if writepath.is_file(): writepath.unlink()
                     if track.fallbackId != "0":
                         logger.warn(f"[{track.mainArtist.name} - {track.title}] Track not available, using fallback id")
@@ -523,7 +522,7 @@ class DownloadJob:
                             raise DownloadFailed("notAvailableNoAlternative")
                     else:
                         raise DownloadFailed("notAvailable")
-                except (request_exception.ConnectionError, request_exception.ChunkedEncodingError) as e:
+                except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
                     if writepath.is_file(): writepath.unlink()
                     logger.warn(f"[{track.mainArtist.name} - {track.title}] Error while downloading the track, trying again in 5s...")
                     sleep(5)
@@ -616,7 +615,7 @@ class DownloadJob:
                         try:
                             request.raise_for_status()
                             return formatNumber
-                        except request_exception.HTTPError: # if the format is not available, Deezer returns a 403 error
+                        except requests.exceptions.HTTPError: # if the format is not available, Deezer returns a 403 error
                             pass
                 if not shouldFallback:
                     raise PreferredBitrateNotFound
@@ -680,7 +679,7 @@ class DownloadJob:
         except (SSLError, u3SSLError) as e:
             logger.info(f'{itemName} retrying from byte {chunkLength}')
             return self.streamTrack(stream, track, chunkLength)
-        except (request_exception.ConnectionError, requests.exceptions.ReadTimeout):
+        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout):
             sleep(2)
             return self.streamTrack(stream, track, start)
 
