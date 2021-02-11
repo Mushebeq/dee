@@ -1,8 +1,9 @@
-import eventlet
-from eventlet.green.subprocess import call as execute
-requests = eventlet.import_patched('requests')
+import requests
 get = requests.get
 request_exception = requests.exceptions
+
+from concurrent.futures import ThreadPoolExecutor
+from time import sleep
 
 from os.path import sep as pathSep
 from pathlib import Path
@@ -74,12 +75,12 @@ def downloadImage(url, path, overwrite=OverwriteOption.DONT_OVERWRITE):
                 pictureSize = int(pictureUrl[:pictureUrl.find("x")])
                 if pictureSize > 1200:
                     logger.warn("Couldn't download "+str(pictureSize)+"x"+str(pictureSize)+" image, falling back to 1200x1200")
-                    eventlet.sleep(1)
+                    sleep(1)
                     return  downloadImage(urlBase+pictureUrl.replace(str(pictureSize)+"x"+str(pictureSize), '1200x1200'), path, overwrite)
             logger.error("Image not found: "+url)
         except (request_exception.ConnectionError, request_exception.ChunkedEncodingError, u3SSLError) as e:
             logger.error("Couldn't download Image, retrying in 5 seconds...: "+url+"\n")
-            eventlet.sleep(5)
+            sleep(5)
             return downloadImage(url, path, overwrite)
         except OSError as e:
             if e.errno == errno.ENOSPC:
@@ -114,9 +115,9 @@ class DownloadJob:
                 if result: self.singleAfterDownload(result)
             elif isinstance(self.queueItem, QICollection):
                 tracks = [None] * len(self.queueItem.collection)
-                pool = eventlet.GreenPool(size=self.settings['queueConcurrency'])
-                for pos, track in enumerate(self.queueItem.collection, start=0):
-                    tracks[pos] = pool.spawn(self.downloadWrapper, track)
+                with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
+                    for pos, track in enumerate(self.queueItem.collection, start=0):
+                        tracks[pos] = executor.submit(self.downloadWrapper, track)
                 pool.waitall()
                 self.collectionAfterDownload(tracks)
         if self.interface:
@@ -525,7 +526,7 @@ class DownloadJob:
                 except (request_exception.ConnectionError, request_exception.ChunkedEncodingError) as e:
                     if writepath.is_file(): writepath.unlink()
                     logger.warn(f"[{track.mainArtist.name} - {track.title}] Error while downloading the track, trying again in 5s...")
-                    eventlet.sleep(5)
+                    sleep(5)
                     return downloadMusic(track, trackAPI_gw)
                 except OSError as e:
                     if e.errno == errno.ENOSPC:
@@ -680,7 +681,7 @@ class DownloadJob:
             logger.info(f'{itemName} retrying from byte {chunkLength}')
             return self.streamTrack(stream, track, chunkLength)
         except (request_exception.ConnectionError, requests.exceptions.ReadTimeout):
-            eventlet.sleep(2)
+            sleep(2)
             return self.streamTrack(stream, track, start)
 
     def updatePercentage(self):

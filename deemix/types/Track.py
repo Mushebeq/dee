@@ -1,5 +1,5 @@
-import eventlet
-requests = eventlet.import_patched('requests')
+from time import sleep
+import requests
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -83,7 +83,7 @@ class Track:
             )
             result_json = site.json()
         except:
-            eventlet.sleep(2)
+            sleep(2)
             return self.retriveFilesizes(dz)
         if len(result_json['error']):
             raise APIError(json.dumps(result_json['error']))
