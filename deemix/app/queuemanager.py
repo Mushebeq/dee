@@ -97,7 +97,7 @@ class QueueManager:
 
         # If the album is a single download as a track
         if albumAPI['nb_tracks'] == 1:
-            return self.generateTrackQueueItem(dz, albumAPI['tracks']['data'][0]['id'], settings, bitrate, albumAPI=albumAPI)
+            return self.generateTrackQueueItem(albumAPI['tracks']['data'][0]['id'], settings, bitrate, albumAPI=albumAPI, dz=dz)
 
         tracksArray = dz.gw.get_album_tracks(id)
 
@@ -204,7 +204,7 @@ class QueueManager:
         allReleases = artistDiscographyAPI.pop('all', [])
         albumList = []
         for album in allReleases:
-            albumList.append(self.generateAlbumQueueItem(dz, album['id'], settings, bitrate, rootArtist=rootArtist))
+            albumList.append(self.generateAlbumQueueItem(album['id'], settings, bitrate, rootArtist=rootArtist, dz=dz))
 
         if interface: interface.send("finishAddingArtist", {'name': artistAPI['name'], 'id': artistAPI['id']})
         return albumList
@@ -229,7 +229,7 @@ class QueueManager:
         albumList = []
         for type in artistDiscographyAPI:
             for album in artistDiscographyAPI[type]:
-                albumList.append(self.generateAlbumQueueItem(dz, album['id'], settings, bitrate, rootArtist=rootArtist))
+                albumList.append(self.generateAlbumQueueItem(album['id'], settings, bitrate, rootArtist=rootArtist, dz=dz))
 
         if interface: interface.send("finishAddingArtist", {'name': artistAPI['name'], 'id': artistAPI['id']})
         return albumList
@@ -316,17 +316,17 @@ class QueueManager:
             return QueueError(url, "URL not recognized", "invalidURL")
 
         if type == "track":
-            return self.generateTrackQueueItem(dz, id, settings, bitrate)
+            return self.generateTrackQueueItem(id, settings, bitrate, dz=dz)
         elif type == "album":
-            return self.generateAlbumQueueItem(dz, id, settings, bitrate)
+            return self.generateAlbumQueueItem(id, settings, bitrate, dz=dz)
         elif type == "playlist":
-            return self.generatePlaylistQueueItem(dz, id, settings, bitrate)
+            return self.generatePlaylistQueueItem(id, settings, bitrate, dz=dz)
         elif type == "artist":
-            return self.generateArtistQueueItem(dz, id, settings, bitrate, interface=interface)
+            return self.generateArtistQueueItem(id, settings, bitrate, interface=interface, dz=dz)
         elif type == "artistdiscography":
-            return self.generateArtistDiscographyQueueItem(dz, id, settings, bitrate, interface=interface)
+            return self.generateArtistDiscographyQueueItem(id, settings, bitrate, interface=interface, dz=dz)
         elif type == "artisttop":
-            return self.generateArtistTopQueueItem(dz, id, settings, bitrate, interface=interface)
+            return self.generateArtistTopQueueItem(id, settings, bitrate, interface=interface, dz=dz)
         elif type.startswith("spotify") and self.sp:
             if not self.sp.spotifyEnabled:
                 logger.warn("Spotify Features is not setted up correctly.")
@@ -341,7 +341,7 @@ class QueueManager:
                     return QueueError(url, "Something went wrong: "+str(e))
 
                 if track_id != "0":
-                    return self.generateTrackQueueItem(dz, track_id, settings, bitrate, trackAPI=trackAPI)
+                    return self.generateTrackQueueItem(track_id, settings, bitrate, trackAPI=trackAPI, dz=dz)
                 else:
                     logger.warn("Track not found on deezer!")
                     return QueueError(url, "Track not found on deezer!", "trackNotOnDeezer")
@@ -355,7 +355,7 @@ class QueueManager:
                     return QueueError(url, "Something went wrong: "+str(e))
 
                 if album_id != "0":
-                    return self.generateAlbumQueueItem(dz, album_id, settings, bitrate)
+                    return self.generateAlbumQueueItem(album_id, settings, bitrate, dz=dz)
                 else:
                     logger.warn("Album not found on deezer!")
                     return QueueError(url, "Album not found on deezer!", "albumNotOnDeezer")
@@ -381,7 +381,7 @@ class QueueManager:
             link = link.strip()
             if link == "": return False
             logger.info("Generating queue item for: "+link)
-            item = self.generateQueueItem(dz, link, settings, bitrate, interface=interface)
+            item = self.generateQueueItem(link, settings, bitrate, interface=interface, dz=dz)
 
             # Add ack to all items
             if type(item) is list:
