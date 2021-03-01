@@ -117,7 +117,6 @@ class DownloadJob:
                 with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
                     for pos, track in enumerate(self.queueItem.collection, start=0):
                         tracks[pos] = executor.submit(self.downloadWrapper, track)
-                pool.waitall()
                 self.collectionAfterDownload(tracks)
         if self.interface:
             if self.queueItem.cancel:
@@ -159,7 +158,7 @@ class DownloadJob:
         searched = ""
 
         for i in range(len(tracks)):
-            result = tracks[i].wait()
+            result = tracks[i].result()
             if not result: return None # Check if item is cancelled
 
             # Log errors to file

@@ -15,6 +15,8 @@ from os import remove
 import uuid
 from urllib.request import urlopen
 
+import threading
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('deemix')
 
@@ -26,6 +28,7 @@ class QueueManager:
         self.currentItem = ""
         self.dz = deezerHelper or Deezer()
         self.sp = spotifyHelper
+        self.queueThread = None
 
     def generateTrackQueueItem(self, id, settings, bitrate, trackAPI=None, albumAPI=None, dz=None):
         if not dz: dz = self.dz
@@ -440,15 +443,18 @@ class QueueManager:
                 if interface: interface.send("addedToQueue", queueItem.getSlimmedItem())
             else:
                 return False
-        self.nextItem(dz, interface)
+        if not self.queueThread:
+            self.queueThread = threading.Thread(target=self.nextItem, args=(dz, interface))
+            self.queueThread.start()
         return True
 
     def nextItem(self, dz=None, interface=None):
         if not dz: dz = self.dz
         # Check that nothing is already downloading and
         # that the queue is not empty
-        if self.currentItem != "": return None
-        if not len(self.queue): return None
+        if self.currentItem != "" or not len(self.queue):
+            self.queueThread = None
+            return None
 
         self.currentItem = self.queue.pop(0)
 
