@@ -443,9 +443,7 @@ class QueueManager:
                 if interface: interface.send("addedToQueue", queueItem.getSlimmedItem())
             else:
                 return False
-        if not self.queueThread:
-            self.queueThread = threading.Thread(target=self.nextItem, args=(dz, interface))
-            self.queueThread.start()
+        self.startQueue(interface, dz)
         return True
 
     def nextItem(self, dz=None, interface=None):
@@ -528,6 +526,12 @@ class QueueManager:
                     'queueList': self.slimQueueList(),
                     'restored': True
                 })
+
+    def startQueue(self, interface=None, dz=None):
+        if not dz: dz = self.dz
+        if dz.logged_in and not self.queueThread:
+            self.queueThread = threading.Thread(target=self.nextItem, args=(dz, interface))
+            self.queueThread.start()
 
     def restoreQueue(self, queue, queueComplete, queueList, settings):
         self.queue = queue
