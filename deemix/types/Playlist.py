@@ -4,17 +4,6 @@ from deemix.types.Picture import Picture
 
 class Playlist:
     def __init__(self, playlistAPI):
-        if 'various_artist' in playlistAPI:
-            playlistAPI['various_artist']['role'] = "Main"
-            self.variousArtists = Artist(
-                id = playlistAPI['various_artist']['id'],
-                name = playlistAPI['various_artist']['name'],
-                pic_md5 = playlistAPI['various_artist']['picture_small'][
-                       playlistAPI['various_artist']['picture_small'].find('artist/') + 7:-24],
-                role = playlistAPI['various_artist']['role']
-            )
-            self.mainArtist = self.variousArtists
-
         self.id = "pl_" + str(playlistAPI['id'])
         self.title = playlistAPI['title']
         self.rootArtist = None
@@ -30,11 +19,12 @@ class Playlist:
         year = playlistAPI["creation_date"][0:4]
         month = playlistAPI["creation_date"][5:7]
         day = playlistAPI["creation_date"][8:10]
-        self.date = Date(year, month, day)
+        self.date = Date(day, month, year)
 
         self.discTotal = "1"
-        self.playlistId = playlistAPI['id']
+        self.playlistID = playlistAPI['id']
         self.owner = playlistAPI['creator']
+
         if 'dzcdn.net' in playlistAPI['picture_small']:
             url = playlistAPI['picture_small']
             picType = url[url.find('images/')+7:]
@@ -46,3 +36,14 @@ class Playlist:
             )
         else:
             self.pic = Picture(url = playlistAPI['picture_xl'])
+
+        if 'various_artist' in playlistAPI:
+            pic_md5 = playlistAPI['various_artist']['picture_small']
+            pic_md5 = pic_md5[pic_md5.indexOf('artist/') + 7:-24]
+            self.variousArtists = Artist(
+                id = playlistAPI['various_artist']['id'],
+                name = playlistAPI['various_artist']['name'],
+                role = "Main",
+                pic_md5 = pic_md5
+            )
+            self.mainArtist = self.variousArtists

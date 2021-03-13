@@ -1,16 +1,14 @@
 class Lyrics:
     def __init__(self, id="0"):
         self.id = id
-        self.sync = None
-        self.unsync = None
-        self.syncID3 = None
+        self.sync = ""
+        self.unsync = ""
+        self.syncID3 = []
 
     def parseLyrics(self, lyricsAPI):
         self.unsync = lyricsAPI.get("LYRICS_TEXT")
         if "LYRICS_SYNC_JSON" in lyricsAPI:
             syncLyricsJson = lyricsAPI["LYRICS_SYNC_JSON"]
-            self.sync = ""
-            self.syncID3 = []
             timestamp = ""
             milliseconds = 0
             for line in range(len(syncLyricsJson)):

@@ -1,5 +1,5 @@
 class Date(object):
-    def __init__(self, year="XXXX", month="00", day="00"):
+    def __init__(self, day="00", month="00", year="XXXX"):
         self.year = year
         self.month = month
         self.day = day
