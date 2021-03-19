@@ -14,7 +14,7 @@ from deemix.types.Date import Date
 from deemix.types.Picture import Picture
 from deemix.types.Playlist import Playlist
 from deemix.types.Lyrics import Lyrics
-from deemix import VARIOUS_ARTISTS
+from deemix.types import VARIOUS_ARTISTS
 
 class Track:
     def __init__(self, id="0", name=""):
@@ -258,6 +258,91 @@ class Track:
         self.featArtistsString = ""
         if 'Featured' in self.artist:
             self.featArtistsString = "feat. "+andCommaConcat(self.artist['Featured'])
+
+    def applySettings(self, settings, TEMPDIR, embeddedImageFormat):
+        from deemix.settings import FeaturesOption
+        
+        # Check if should save the playlist as a compilation
+        if self.playlist and settings['tags']['savePlaylistAsCompilation']:
+            self.trackNumber = self.position
+            self.discNumber = "1"
+            self.album.makePlaylistCompilation(self.playlist)
+            self.album.embeddedCoverURL = self.playlist.pic.generatePictureURL(settings['embeddedArtworkSize'], embeddedImageFormat)
+
+            ext = self.album.embeddedCoverURL[-4:]
+            if ext[0] != ".": ext = ".jpg" # Check for Spotify images
+
+            self.album.embeddedCoverPath = TEMPDIR / f"pl{trackAPI_gw['_EXTRA_PLAYLIST']['id']}_{settings['embeddedArtworkSize']}{ext}"
+        else:
+            if self.album.date: self.date = self.album.date
+            self.album.embeddedCoverURL = self.album.pic.generatePictureURL(settings['embeddedArtworkSize'], embeddedImageFormat)
+
+            ext = self.album.embeddedCoverURL[-4:]
+            self.album.embeddedCoverPath = TEMPDIR / f"alb{self.album.id}_{settings['embeddedArtworkSize']}{ext}"
+
+        self.dateString = self.date.format(settings['dateFormat'])
+        self.album.dateString = self.album.date.format(settings['dateFormat'])
+        if self.playlist: self.playlist.dateString = self.playlist.date.format(settings['dateFormat'])
+
+        # Check various artist option
+        if settings['albumVariousArtists'] and self.album.variousArtists:
+            artist = self.album.variousArtists
+            isMainArtist = artist.role == "Main"
+
+            if artist.name not in self.album.artists:
+                self.album.artists.insert(0, artist.name)
+
+            if isMainArtist or artist.name not in self.album.artist['Main'] and not isMainArtist:
+                if not artist.role in self.album.artist:
+                    self.album.artist[artist.role] = []
+                self.album.artist[artist.role].insert(0, artist.name)
+        self.album.mainArtist.save = not self.album.mainArtist.isVariousArtists() or settings['albumVariousArtists'] and self.album.mainArtist.isVariousArtists()
+
+        # Check removeDuplicateArtists
+        if settings['removeDuplicateArtists']: self.removeDuplicateArtists()
+
+        # Check if user wants the feat in the title
+        if str(settings['featuredToTitle']) == FeaturesOption.REMOVE_TITLE:
+            self.title = self.getCleanTitle()
+        elif str(settings['featuredToTitle']) == FeaturesOption.MOVE_TITLE:
+            self.title = self.getFeatTitle()
+        elif str(settings['featuredToTitle']) == FeaturesOption.REMOVE_TITLE_ALBUM:
+            self.title = self.getCleanTitle()
+            self.album.title = self.album.getCleanTitle()
+
+        # Remove (Album Version) from tracks that have that
+        if settings['removeAlbumVersion']:
+            if "Album Version" in self.title:
+                self.title = re.sub(r' ?\(Album Version\)', "", self.title).strip()
+
+        # Change Title and Artists casing if needed
+        if settings['titleCasing'] != "nothing":
+            self.title = changeCase(self.title, settings['titleCasing'])
+        if settings['artistCasing'] != "nothing":
+            self.mainArtist.name = changeCase(self.mainArtist.name, settings['artistCasing'])
+            for i, artist in enumerate(self.artists):
+                self.artists[i] = changeCase(artist, settings['artistCasing'])
+            for type in self.artist:
+                for i, artist in enumerate(self.artist[type]):
+                    self.artist[type][i] = changeCase(artist, settings['artistCasing'])
+            self.generateMainFeatStrings()
+
+        # Generate artist tag
+        if settings['tags']['multiArtistSeparator'] == "default":
+            if str(settings['featuredToTitle']) == FeaturesOption.MOVE_TITLE:
+                self.artistsString = ", ".join(self.artist['Main'])
+            else:
+                self.artistsString = ", ".join(self.artists)
+        elif settings['tags']['multiArtistSeparator'] == "andFeat":
+            self.artistsString = self.mainArtistsString
+            if self.featArtistsString and str(settings['featuredToTitle']) != FeaturesOption.MOVE_TITLE:
+                self.artistsString += " " + self.featArtistsString
+        else:
+            separator = settings['tags']['multiArtistSeparator']
+            if str(settings['featuredToTitle']) == FeaturesOption.MOVE_TITLE:
+                self.artistsString = separator.join(self.artist['Main'])
+            else:
+                self.artistsString = separator.join(self.artists)
 
 class TrackError(Exception):
     """Base class for exceptions in this module."""

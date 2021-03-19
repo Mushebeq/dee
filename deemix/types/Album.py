@@ -4,7 +4,7 @@ from deemix.utils import removeDuplicateArtists, removeFeatures
 from deemix.types.Artist import Artist
 from deemix.types.Date import Date
 from deemix.types.Picture import Picture
-from deemix import VARIOUS_ARTISTS
+from deemix.types import VARIOUS_ARTISTS
 
 class Album:
     def __init__(self, id="0", title="", pic_md5=""):

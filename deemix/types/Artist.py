@@ -1,5 +1,5 @@
 from deemix.types.Picture import Picture
-from deemix import VARIOUS_ARTISTS
+from deemix.types import VARIOUS_ARTISTS
 
 class Artist:
     def __init__(self, id="0", name="", role="", pic_md5=""):
