@@ -2,6 +2,18 @@ import binascii
 from Cryptodome.Cipher import Blowfish, AES
 from Cryptodome.Hash import MD5
 
+from deemix import USER_AGENT_HEADER
+from deemix.types.DownloadObjects import Single, Collection
+
+from requests import get
+
+from requests.exceptions import ConnectionError, ReadTimeout
+from ssl import SSLError
+from urllib3.exceptions import SSLError as u3SSLError
+
+import logging
+logger = logging.getLogger('deemix')
+
 def _md5(data):
     h = MD5.new()
     h.update(str.encode(data) if isinstance(data, str) else data)
@@ -40,3 +52,127 @@ def generateUnencryptedStreamURL(sng_id, md5, media_version, format):
 def reverseStreamURL(url):
     urlPart = url[url.find("/1/")+3:]
     return generateStreamPath(urlPart)
+
+def streamUnencryptedTrack(outputStream, track, start=0, downloadObject=None, interface=None):
+    headers= {'User-Agent': USER_AGENT_HEADER}
+    chunkLength = start
+    percentage = 0
+
+    itemName = f"[{track.mainArtist.name} - {track.title}]"
+
+    try:
+        with get(track.downloadUrl, headers=headers, stream=True, timeout=10) as request:
+            request.raise_for_status()
+
+            complete = int(request.headers["Content-Length"])
+            if complete == 0: raise DownloadEmpty
+            if start != 0:
+                responseRange = request.headers["Content-Range"]
+                logger.info(f'{itemName} downloading range {responseRange}')
+            else:
+                logger.info(f'{itemName} downloading {complete} bytes')
+
+            for chunk in request.iter_content(2048 * 3):
+                outputStream.write(chunk)
+                chunkLength += len(chunk)
+
+                if downloadObject:
+                    if isinstance(downloadObject, Single):
+                        percentage = (chunkLength / (complete + start)) * 100
+                        downloadObject.progressNext = percentage
+                    else:
+                        chunkProgres = (len(chunk) / (complete + start)) / downloadObject.size * 100
+                        downloadObject.progressNext += chunkProgres
+                    downloadObject.updateProgress(interface)
+
+    except (SSLError, u3SSLError) as e:
+        logger.info(f'{itemName} retrying from byte {chunkLength}')
+        return streamUnencryptedTrack(outputStream, track, chunkLength, downloadObject, interface)
+    except (ConnectionError, ReadTimeout):
+        sleep(2)
+        return streamUnencryptedTrack(outputStream, track, start, downloadObject, interface)
+
+def streamUnencryptedTrack(outputStream, track, start=0, downloadObject=None, interface=None):
+    headers= {'User-Agent': USER_AGENT_HEADER}
+    chunkLength = start
+    percentage = 0
+
+    itemName = f"[{track.mainArtist.name} - {track.title}]"
+
+    try:
+        with get(track.downloadUrl, headers=headers, stream=True, timeout=10) as request:
+            request.raise_for_status()
+
+            complete = int(request.headers["Content-Length"])
+            if complete == 0: raise DownloadEmpty
+            if start != 0:
+                responseRange = request.headers["Content-Range"]
+                logger.info(f'{itemName} downloading range {responseRange}')
+            else:
+                logger.info(f'{itemName} downloading {complete} bytes')
+
+            for chunk in request.iter_content(2048 * 3):
+                outputStream.write(chunk)
+                chunkLength += len(chunk)
+
+                if downloadObject:
+                    if isinstance(downloadObject, Single):
+                        percentage = (chunkLength / (complete + start)) * 100
+                        downloadObject.progressNext = percentage
+                    else:
+                        chunkProgres = (len(chunk) / (complete + start)) / downloadObject.size * 100
+                        downloadObject.progressNext += chunkProgres
+                    downloadObject.updateProgress(interface)
+
+    except (SSLError, u3SSLError) as e:
+        logger.info(f'{itemName} retrying from byte {chunkLength}')
+        return streamUnencryptedTrack(outputStream, track, chunkLength, downloadObject, interface)
+    except (ConnectionError, ReadTimeout):
+        sleep(2)
+        return streamUnencryptedTrack(outputStream, track, start, downloadObject, interface)
+
+def streamTrack(outputStream, track, start=0, downloadObject=None, interface=None):
+    headers= {'User-Agent': USER_AGENT_HEADER}
+    chunkLength = start
+    percentage = 0
+
+    itemName = f"[{track.mainArtist.name} - {track.title}]"
+
+    try:
+        with get(track.downloadUrl, headers=headers, stream=True, timeout=10) as request:
+            request.raise_for_status()
+            blowfish_key = str.encode(generateBlowfishKey(str(track.id)))
+
+            complete = int(request.headers["Content-Length"])
+            if complete == 0: raise DownloadEmpty
+            if start != 0:
+                responseRange = request.headers["Content-Range"]
+                logger.info(f'{itemName} downloading range {responseRange}')
+            else:
+                logger.info(f'{itemName} downloading {complete} bytes')
+
+            for chunk in request.iter_content(2048 * 3):
+                if len(chunk) >= 2048:
+                    chunk = Blowfish.new(blowfish_key, Blowfish.MODE_CBC, b"\x00\x01\x02\x03\x04\x05\x06\x07").decrypt(chunk[0:2048]) + chunk[2048:]
+
+                outputStream.write(chunk)
+                chunkLength += len(chunk)
+
+                if downloadObject:
+                    if isinstance(downloadObject, Single):
+                        percentage = (chunkLength / (complete + start)) * 100
+                        downloadObject.progressNext = percentage
+                    else:
+                        chunkProgres = (len(chunk) / (complete + start)) / downloadObject.size * 100
+                        downloadObject.progressNext += chunkProgres
+                    downloadObject.updateProgress(interface)
+
+    except (SSLError, u3SSLError) as e:
+        logger.info(f'{itemName} retrying from byte {chunkLength}')
+        return streamTrack(outputStream, track, chunkLength, downloadObject, interface)
+    except (ConnectionError, ReadTimeout):
+        sleep(2)
+        return streamTrack(outputStream, track, start, downloadObject, interface)
+
+class DownloadEmpty(Exception):
+    pass

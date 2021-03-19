@@ -39,7 +39,7 @@ class Playlist:
 
         if 'various_artist' in playlistAPI:
             pic_md5 = playlistAPI['various_artist']['picture_small']
-            pic_md5 = pic_md5[pic_md5.indexOf('artist/') + 7:-24]
+            pic_md5 = pic_md5[pic_md5.find('artist/') + 7:-24]
             self.variousArtists = Artist(
                 id = playlistAPI['various_artist']['id'],
                 name = playlistAPI['various_artist']['name'],

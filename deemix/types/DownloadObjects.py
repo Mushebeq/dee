@@ -28,6 +28,7 @@ class IDownloadObject:
             self.progress = 0
             self.errors = []
             self.files = []
+        self.progressNext = 0
         self.uuid = f"{self.type}_{self.id}_{self.bitrate}"
         self.ack = None
         self.__type__ = None
@@ -69,6 +70,11 @@ class IDownloadObject:
                 del light[property]
         return light
 
+    def updateProgress(self, interface=None):
+        if round(self.progressNext) != self.progress and round(self.progressNext) % 2 == 0:
+            self.progress = round(self.progressNext)
+            if interface: interface.send("updateQueue", {'uuid': self.uuid, 'progress': self.progress})
+
 class Single(IDownloadObject):
     def __init__(self, type=None, id=None, bitrate=None, title=None, artist=None, cover=None, explicit=False, trackAPI_gw=None, trackAPI=None, albumAPI=None, dictItem=None):
         if dictItem:
@@ -88,6 +94,14 @@ class Single(IDownloadObject):
         item['single'] = self.single
         return item
 
+    def completeTrackProgress(self, interface=None):
+        self.progressNext = 100
+        self.updateProgress(interface)
+
+    def removeTrackProgress(self, interface=None):
+        self.progressNext = 0
+        self.updateProgress(interface)
+
 class Collection(IDownloadObject):
     def __init__(self, type=None, id=None, bitrate=None, title=None, artist=None, cover=None, explicit=False, size=None, tracks_gw=None, albumAPI=None, playlistAPI=None, dictItem=None):
         if dictItem:
@@ -106,6 +120,14 @@ class Collection(IDownloadObject):
         item = super().toDict()
         item['collection'] = self.collection
         return item
+
+    def completeTrackProgress(self, interface=None):
+        self.progressNext += (1 / self.size) * 100
+        self.updateProgress(interface)
+
+    def removeTrackProgress(self, interface=None):
+        self.progressNext -= (1 / self.size) * 100
+        self.updateProgress(interface)
 
 class Convertable(Collection):
     def __init__(self, type=None, id=None, bitrate=None, title=None, artist=None, cover=None, explicit=False, size=None, plugin=None, conversion_data=None, dictItem=None):

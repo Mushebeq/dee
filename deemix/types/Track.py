@@ -5,9 +5,10 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('deemix')
 
-from deezer.gw import APIError as gwAPIError
+from deezer.gw import GWAPIError
 from deezer.api import APIError
-from deemix.utils import removeFeatures, andCommaConcat, removeDuplicateArtists, generateReplayGainString
+from deemix.utils import removeFeatures, andCommaConcat, removeDuplicateArtists, generateReplayGainString, changeCase
+
 from deemix.types.Album import Album
 from deemix.types.Artist import Artist
 from deemix.types.Date import Date
@@ -114,7 +115,7 @@ class Track:
             # Get Lyrics data
             if not "LYRICS" in trackAPI_gw and self.lyrics.id != "0":
                 try: trackAPI_gw["LYRICS"] = dz.gw.get_track_lyrics(self.id)
-                except gwAPIError: self.lyrics.id = "0"
+                except GWAPIError: self.lyrics.id = "0"
             if self.lyrics.id != "0": self.lyrics.parseLyrics(trackAPI_gw["LYRICS"])
 
             # Parse Album data
@@ -132,7 +133,7 @@ class Track:
             # Get album_gw Data
             if not albumAPI_gw:
                 try: albumAPI_gw = dz.gw.get_album(self.album.id)
-                except gwAPIError: albumAPI_gw = None
+                except GWAPIError: albumAPI_gw = None
 
             if albumAPI:
                 self.album.parseAlbum(albumAPI)
@@ -261,7 +262,7 @@ class Track:
 
     def applySettings(self, settings, TEMPDIR, embeddedImageFormat):
         from deemix.settings import FeaturesOption
-        
+
         # Check if should save the playlist as a compilation
         if self.playlist and settings['tags']['savePlaylistAsCompilation']:
             self.trackNumber = self.position

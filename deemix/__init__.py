@@ -26,19 +26,19 @@ def parseLink(link):
         id = link[link.rfind("/") + 1:]
     elif '/playlist' in link:
         type = 'playlist'
-        id = re.search("\/playlist\/(\d+)", link)[0]
+        id = re.search("\/playlist\/(\d+)", link).group(1)
     elif '/album' in link:
         type = 'album'
         id = link[link.rfind("/") + 1:]
     elif re.search("\/artist\/(\d+)\/top_track", link):
         type = 'artist_top'
-        id = re.search("\/artist\/(\d+)\/top_track", link)[0]
+        id = re.search("\/artist\/(\d+)\/top_track", link).group(1)
     elif re.search("\/artist\/(\d+)\/discography", link):
         type = 'artist_discography'
-        id = re.search("\/artist\/(\d+)\/discography", link)[0]
+        id = re.search("\/artist\/(\d+)\/discography", link).group(1)
     elif '/artist' in link:
         type = 'artist'
-        id = re.search("\/artist\/(\d+)", link)[0]
+        id = re.search("\/artist\/(\d+)", link).group(1)
 
     return (link, type, id)
 

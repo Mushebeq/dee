@@ -148,7 +148,7 @@ def settingsRegex(filename, track, settings):
     filename = filename.replace("%album_id%", str(track.album.id))
     filename = filename.replace("%artist_id%", str(track.mainArtist.id))
     if track.playlist:
-        filename = filename.replace("%playlist_id%", str(track.playlist.playlistId))
+        filename = filename.replace("%playlist_id%", str(track.playlist.playlistID))
         filename = filename.replace("%position%", pad(track.position, track.playlist.trackTotal, settings))
     else:
         filename = filename.replace("%playlist_id%", '')
@@ -159,7 +159,7 @@ def settingsRegex(filename, track, settings):
 
 def settingsRegexAlbum(foldername, album, settings, playlist=None):
     if playlist and settings['tags']['savePlaylistAsCompilation']:
-        foldername = foldername.replace("%album_id%", "pl_" + str(playlist.playlistId))
+        foldername = foldername.replace("%album_id%", "pl_" + str(playlist.playlistID))
         foldername = foldername.replace("%genre%", "Compile")
     else:
         foldername = foldername.replace("%album_id%", str(album.id))
@@ -205,7 +205,7 @@ def settingsRegexArtist(foldername, artist, settings, rootArtist=None):
 
 def settingsRegexPlaylist(foldername, playlist, settings):
     foldername = foldername.replace("%playlist%", fixName(playlist.title, settings['illegalCharacterReplacer']))
-    foldername = foldername.replace("%playlist_id%", fixName(playlist.playlistId, settings['illegalCharacterReplacer']))
+    foldername = foldername.replace("%playlist_id%", fixName(playlist.playlistID, settings['illegalCharacterReplacer']))
     foldername = foldername.replace("%owner%", fixName(playlist.owner['name'], settings['illegalCharacterReplacer']))
     foldername = foldername.replace("%owner_id%", str(playlist.owner['id']))
     foldername = foldername.replace("%year%", str(playlist.date.year))

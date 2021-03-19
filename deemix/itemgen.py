@@ -1,4 +1,6 @@
 from deemix.types.DownloadObjects import Single, Collection
+from deezer.api import APIError
+from deezer.gw import GWAPIError, LyricsStatus
 
 class GenerationError(Exception):
     def __init__(self, link, message, errid=None):
@@ -29,7 +31,7 @@ def generateTrackItem(dz, id, bitrate, trackAPI=None, albumAPI=None):
     # Get essential track info
     try:
         trackAPI_gw = dz.gw.get_track_with_fallback(id)
-    except gwAPIError as e:
+    except GWAPIError as e:
         e = str(e)
         message = "Wrong URL"
         if "DATA_ERROR" in e: message += f": {e['DATA_ERROR']}"
@@ -116,7 +118,7 @@ def generatePlaylistItem(dz, id, bitrate, playlistAPI=None, playlistTracksAPI=No
             try:
                 userPlaylist = dz.gw.get_playlist_page(id)
                 playlistAPI = map_user_playlist(userPlaylist['DATA'])
-            except gwAPIError as e:
+            except GWAPIError as e:
                 e = str(e)
                 message = "Wrong URL"
                 if "DATA_ERROR" in e:

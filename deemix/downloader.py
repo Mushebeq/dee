@@ -11,24 +11,21 @@ import re
 import errno
 
 from ssl import SSLError
-from os import makedirs
 from urllib3.exceptions import SSLError as u3SSLError
+from os import makedirs
 
 from deemix.types.DownloadObjects import Single, Collection
 from deemix.types.Track import Track, AlbumDoesntExists
-from deemix.utils import changeCase
 from deemix.utils.pathtemplates import generateFilename, generateFilepath, settingsRegexAlbum, settingsRegexArtist, settingsRegexPlaylistFile
 from deezer import TrackFormats
 from deemix import USER_AGENT_HEADER
 from deemix.taggers import tagID3, tagFLAC
-from deemix.decryption import generateStreamURL, generateBlowfishKey
+from deemix.decryption import generateUnencryptedStreamURL, streamUnencryptedTrack
 from deemix.settings import OverwriteOption
 
-from Cryptodome.Cipher import Blowfish
 from mutagen.flac import FLACNoHeaderError, error as FLACError
-import logging
 
-logging.basicConfig(level=logging.INFO)
+import logging
 logger = logging.getLogger('deemix')
 
 from tempfile import gettempdir
@@ -124,7 +121,7 @@ def getPreferredBitrate(track, preferredBitrate, shouldFallback, downloadObjectU
                 if int(track.filesizes[f"FILESIZE_{formatName}"]) != 0: return formatNumber
                 if not track.filesizes[f"FILESIZE_{formatName}_TESTED"]:
                     request = requests.head(
-                        generateStreamURL(track.id, track.MD5, track.mediaVersion, formatNumber),
+                        generateUnencryptedStreamURL(track.id, track.MD5, track.mediaVersion, formatNumber),
                         headers={'User-Agent': USER_AGENT_HEADER},
                         timeout=30
                     )
@@ -159,8 +156,6 @@ class Downloader:
         self.settings = settings
         self.bitrate = downloadObject.bitrate
         self.interface = interface
-        self.downloadPercentage = 0
-        self.lastPercentage = 0
         self.extrasPath = None
         self.playlistCoverName = None
         self.playlistURLs = []
@@ -184,7 +179,6 @@ class Downloader:
         if trackAPI_gw['SNG_ID'] == "0": raise DownloadFailed("notOnDeezer")
 
         # Create Track object
-        print(track)
         if not track:
             logger.info(f"[{trackAPI_gw['ART_NAME']} - {trackAPI_gw['SNG_TITLE']}] Getting the tags")
             try:
@@ -252,7 +246,7 @@ class Downloader:
                     url = track.album.pic.generatePictureURL(self.settings['localArtworkSize'], extendedFormat)
                     if self.settings['tags']['savePlaylistAsCompilation'] \
                         and track.playlist \
-                        and track.playlist.pic.url \
+                        and track.playlist.pic.staticUrl \
                         and not format.startswith("jpg"):
                             continue
                     result['albumURLs'].append({'url': url, 'ext': format})
@@ -280,7 +274,7 @@ class Downloader:
                         extendedFormat = format
                         if extendedFormat == "jpg": extendedFormat += f"-{self.settings['jpegImageQuality']}"
                         url = track.playlist.pic.generatePictureURL(self.settings['localArtworkSize'], extendedFormat)
-                        if track.playlist.pic.url and not format.startswith("jpg"): continue
+                        if track.playlist.pic.staticUrl and not format.startswith("jpg"): continue
                         self.playlistURLs.append({'url': url, 'ext': format})
             if not self.playlistCoverName:
                 track.playlist.bitrate = selectedFormat
@@ -316,12 +310,12 @@ class Downloader:
 
         if not trackAlreadyDownloaded or self.settings['overwriteFile'] == OverwriteOption.OVERWRITE:
             logger.info(f"[{track.mainArtist.name} - {track.title}] Downloading the track")
-            track.downloadUrl = generateStreamURL(track.id, track.MD5, track.mediaVersion, track.selectedFormat)
+            track.downloadUrl = generateUnencryptedStreamURL(track.id, track.MD5, track.mediaVersion, track.selectedFormat)
 
             def downloadMusic(track, trackAPI_gw):
                 try:
                     with open(writepath, 'wb') as stream:
-                        self.streamTrack(stream, track)
+                        streamUnencryptedTrack(stream, track, downloadObject=self.downloadObject, interface=self.interface)
                 except DownloadCancelled:
                     if writepath.is_file(): writepath.unlink()
                     raise DownloadCancelled
@@ -382,7 +376,7 @@ class Downloader:
             if not trackDownloaded: return self.download(trackAPI_gw, track=track)
         else:
             logger.info(f"[{track.mainArtist.name} - {track.title}] Skipping track as it's already downloaded")
-            self.completeTrackPercentage()
+            self.downloadObject.completeTrackProgress(self.interface)
 
         # Adding tags
         if (not trackAlreadyDownloaded or self.settings['overwriteFile'] in [OverwriteOption.ONLY_TAGS, OverwriteOption.OVERWRITE]) and not track.localTrack:
@@ -395,7 +389,7 @@ class Downloader:
                 except (FLACNoHeaderError, FLACError):
                     if writepath.is_file(): writepath.unlink()
                     logger.warn(f"[{track.mainArtist.name} - {track.title}] Track not available in FLAC, falling back if necessary")
-                    self.removeTrackPercentage()
+                    self.downloadObject.removeTrackProgress(self.interface)
                     track.filesizes['FILESIZE_FLAC'] = "0"
                     track.filesizes['FILESIZE_FLAC_TESTED'] = True
                     return self.download(trackAPI_gw, track=track)
@@ -408,71 +402,6 @@ class Downloader:
         if self.interface:
             self.interface.send("updateQueue", {'uuid': self.downloadObject.uuid, 'downloaded': True, 'downloadPath': str(writepath), 'extrasPath': str(self.extrasPath)})
         return result
-
-    def streamTrack(self, stream, track, start=0):
-
-        headers=dict(self.dz.http_headers)
-        if range != 0: headers['Range'] = f'bytes={start}-'
-        chunkLength = start
-        percentage = 0
-
-        itemName = f"[{track.mainArtist.name} - {track.title}]"
-
-        try:
-            with self.dz.session.get(track.downloadUrl, headers=headers, stream=True, timeout=10) as request:
-                request.raise_for_status()
-                blowfish_key = str.encode(generateBlowfishKey(str(track.id)))
-
-                complete = int(request.headers["Content-Length"])
-                if complete == 0: raise DownloadEmpty
-                if start != 0:
-                    responseRange = request.headers["Content-Range"]
-                    logger.info(f'{itemName} downloading range {responseRange}')
-                else:
-                    logger.info(f'{itemName} downloading {complete} bytes')
-
-                for chunk in request.iter_content(2048 * 3):
-
-                    if len(chunk) >= 2048:
-                        chunk = Blowfish.new(blowfish_key, Blowfish.MODE_CBC, b"\x00\x01\x02\x03\x04\x05\x06\x07").decrypt(chunk[0:2048]) + chunk[2048:]
-
-                    stream.write(chunk)
-                    chunkLength += len(chunk)
-
-                    if isinstance(self.downloadObject, Single):
-                        percentage = (chunkLength / (complete + start)) * 100
-                        self.downloadPercentage = percentage
-                    else:
-                        chunkProgres = (len(chunk) / (complete + start)) / self.downloadObject.size * 100
-                        self.downloadPercentage += chunkProgres
-                    self.updatePercentage()
-
-        except (SSLError, u3SSLError) as e:
-            logger.info(f'{itemName} retrying from byte {chunkLength}')
-            return self.streamTrack(stream, track, chunkLength)
-        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout):
-            sleep(2)
-            return self.streamTrack(stream, track, start)
-
-    def updatePercentage(self):
-        if round(self.downloadPercentage) != self.lastPercentage and round(self.downloadPercentage) % 2 == 0:
-            self.lastPercentage = round(self.downloadPercentage)
-            self.downloadObject.progress = self.lastPercentage
-            if self.interface: self.interface.send("updateQueue", {'uuid': self.downloadObject.uuid, 'progress': self.lastPercentage})
-
-    def completeTrackPercentage(self):
-        if isinstance(self.downloadObject, Single):
-            self.downloadPercentage = 100
-        else:
-            self.downloadPercentage += (1 / self.downloadObject.size) * 100
-        self.updatePercentage()
-
-    def removeTrackPercentage(self):
-        if isinstance(self.downloadObject, Single):
-            self.downloadPercentage = 0
-        else:
-            self.downloadPercentage -= (1 / self.downloadObject.size) * 100
-        self.updatePercentage()
 
     def downloadWrapper(self, trackAPI_gw, trackAPI=None, albumAPI=None, playlistAPI=None, track=None):
         # Temp metadata to generate logs
@@ -531,7 +460,7 @@ class Downloader:
                     }}
 
         if 'error' in result:
-            self.completeTrackPercentage()
+            self.downloadObject.completeTrackProgress(self.interface)
             self.downloadObject.failed += 1
             self.downloadObject.errors.append(result['error'])
             if self.interface:
@@ -638,9 +567,6 @@ class DownloadFailed(DownloadError):
         self.track = track
 
 class DownloadCancelled(DownloadError):
-    pass
-
-class DownloadEmpty(DownloadError):
     pass
 
 class PreferredBitrateNotFound(DownloadError):
