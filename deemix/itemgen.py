@@ -42,18 +42,20 @@ def generateTrackItem(dz, id, bitrate, trackAPI=None, albumAPI=None):
         title += f" {trackAPI_gw['VERSION']}".strip()
     explicit = bool(int(trackAPI_gw.get('EXPLICIT_LYRICS', 0)))
 
-    return Single(
-        'track',
-        id,
-        bitrate,
-        title,
-        trackAPI_gw['ART_NAME'],
-        f"https://e-cdns-images.dzcdn.net/images/cover/{trackAPI_gw['ALB_PICTURE']}/75x75-000000-80-0-0.jpg",
-        explicit,
-        trackAPI_gw,
-        trackAPI,
-        albumAPI
-    )
+    return Single({
+        'type': 'track',
+        'id': id,
+        'bitrate': bitrate,
+        'title': title,
+        'artist': trackAPI_gw['ART_NAME'],
+        'cover': f"https://e-cdns-images.dzcdn.net/images/cover/{trackAPI_gw['ALB_PICTURE']}/75x75-000000-80-0-0.jpg",
+        'explicit': explicit,
+        'single': {
+            'trackAPI_gw': trackAPI_gw,
+            'trackAPI': trackAPI,
+            'albumAPI': albumAPI
+        }
+    })
 
 def generateAlbumItem(dz, id, bitrate, rootArtist=None):
     # Get essential album info
@@ -93,18 +95,20 @@ def generateAlbumItem(dz, id, bitrate, rootArtist=None):
 
     explicit = albumAPI_gw.get('EXPLICIT_ALBUM_CONTENT', {}).get('EXPLICIT_LYRICS_STATUS', LyricsStatus.UNKNOWN) in [LyricsStatus.EXPLICIT, LyricsStatus.PARTIALLY_EXPLICIT]
 
-    return Collection(
-        'album',
-        id,
-        bitrate,
-        albumAPI['title'],
-        albumAPI['artist']['name'],
-        cover,
-        explicit,
-        totalSize,
-        tracks_gw=collection,
-        albumAPI=albumAPI
-    )
+    return Collection({
+        'type': 'album',
+        'id': id,
+        'bitrate': bitrate,
+        'title': albumAPI['title'],
+        'artist': albumAPI['artist']['name'],
+        'cover': cover,
+        'explicit': explicit,
+        'size': totalSize,
+        'collection': {
+            'tracks_gw': collection,
+            'albumAPI': albumAPI
+        }
+    })
 
 def generatePlaylistItem(dz, id, bitrate, playlistAPI=None, playlistTracksAPI=None):
     if not playlistAPI:
@@ -146,18 +150,20 @@ def generatePlaylistItem(dz, id, bitrate, playlistAPI=None, playlistTracksAPI=No
 
     if not 'explicit' in playlistAPI: playlistAPI['explicit'] = False
 
-    return Collection(
-        'playlist',
-        id,
-        bitrate,
-        playlistAPI['title'],
-        playlistAPI['creator']['name'],
-        playlistAPI['picture_small'][:-24] + '/75x75-000000-80-0-0.jpg',
-        playlistAPI['explicit'],
-        totalSize,
-        tracks_gw=collection,
-        playlistAPI=playlistAPI
-    )
+    return Collection({
+        'type': 'playlist',
+        'id': id,
+        'bitrate': bitrate,
+        'title': playlistAPI['title'],
+        'artist': playlistAPI['creator']['name'],
+        'cover': playlistAPI['picture_small'][:-24] + '/75x75-000000-80-0-0.jpg',
+        'explicit': playlistAPI['explicit'],
+        'size': totalSize,
+        'collection': {
+            'tracks_gw': collection,
+            'playlistAPI': playlistAPI
+        }
+    })
 
 def generateArtistItem(dz, id, bitrate, interface=None):
     # Get essential artist info

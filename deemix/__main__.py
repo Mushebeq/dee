@@ -5,7 +5,7 @@ from pathlib import Path
 from deezer import Deezer
 from deezer import TrackFormats
 
-from deemix import generateDownloadItem
+from deemix import generateDownloadObject
 from deemix.settings import loadSettings
 from deemix.utils import getBitrateNumberFromText
 import deemix.utils.localpaths as localpaths
@@ -49,8 +49,8 @@ def download(url, bitrate, portable, path):
                 links.append(link)
 
         for link in links:
-            downloadItem = generateDownloadItem(dz, link, bitrate)
-            Downloader(dz, downloadItem, settings).start()
+            downloadObject = generateDownloadObject(dz, link, bitrate)
+            Downloader(dz, downloadObject, settings).start()
 
     if path is not None:
         if path == '': path = '.'

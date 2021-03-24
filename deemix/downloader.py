@@ -321,9 +321,9 @@ class Downloader:
                     raise DownloadCancelled
                 except (requests.exceptions.HTTPError, DownloadEmpty):
                     if writepath.is_file(): writepath.unlink()
-                    if track.fallbackId != "0":
+                    if track.fallbackID != "0":
                         logger.warn(f"[{track.mainArtist.name} - {track.title}] Track not available, using fallback id")
-                        newTrack = self.dz.gw.get_track_with_fallback(track.fallbackId)
+                        newTrack = self.dz.gw.get_track_with_fallback(track.fallbackID)
                         track.parseEssentialData(newTrack)
                         track.retriveFilesizes(self.dz)
                         return False
@@ -418,9 +418,9 @@ class Downloader:
         except DownloadFailed as error:
             if error.track:
                 track = error.track
-                if track.fallbackId != "0":
+                if track.fallbackID != "0":
                     logger.warn(f"[{track.mainArtist.name} - {track.title}] {error.message} Using fallback id")
-                    newTrack = self.dz.gw.get_track_with_fallback(track.fallbackId)
+                    newTrack = self.dz.gw.get_track_with_fallback(track.fallbackID)
                     track.parseEssentialData(newTrack)
                     track.retriveFilesizes(self.dz)
                     return self.downloadWrapper(trackAPI_gw, trackAPI, albumAPI, playlistAPI, track)

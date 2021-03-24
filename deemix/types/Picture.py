@@ -14,10 +14,9 @@ class Picture:
         )
 
         if format.startswith("jpg"):
+            quality = 80
             if '-' in format:
                 quality = format[4:]
-            else:
-                quality = 80
             format = 'jpg'
             return url + f'-000000-{quality}-0-0.jpg'
         if format == 'png':

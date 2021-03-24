@@ -1,12 +1,9 @@
-from time import sleep
 import requests
-
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('deemix')
+from time import sleep
 
 from deezer.gw import GWAPIError
 from deezer.api import APIError
+
 from deemix.utils import removeFeatures, andCommaConcat, removeDuplicateArtists, generateReplayGainString, changeCase
 
 from deemix.types.Album import Album
@@ -24,7 +21,7 @@ class Track:
         self.MD5 = ""
         self.mediaVersion = ""
         self.duration = 0
-        self.fallbackId = "0"
+        self.fallbackID = "0"
         self.filesizes = {}
         self.localTrack = False
         self.mainArtist = None
@@ -46,7 +43,7 @@ class Track:
         self.searched = False
         self.selectedFormat = 0
         self.singleDownload = False
-        self.dateString = None
+        self.dateString = ""
         self.artistsString = ""
         self.mainArtistsString = ""
         self.featArtistsString = ""
@@ -61,14 +58,14 @@ class Track:
             else:
                 raise MD5NotFound
         self.mediaVersion = trackAPI_gw['MEDIA_VERSION']
-        self.fallbackId = "0"
+        self.fallbackID = "0"
         if 'FALLBACK' in trackAPI_gw:
-            self.fallbackId = trackAPI_gw['FALLBACK']['SNG_ID']
+            self.fallbackID = trackAPI_gw['FALLBACK']['SNG_ID']
         self.localTrack = int(self.id) < 0
 
     def retriveFilesizes(self, dz):
+        guest_sid = dz.session.cookies.get('sid')
         try:
-            guest_sid = dz.session.cookies.get('sid')
             site = requests.post(
                 "https://api.deezer.com/1.0/gateway.php",
                 params={
@@ -97,8 +94,7 @@ class Track:
         self.filesizes = filesizes
 
     def parseData(self, dz, id=None, trackAPI_gw=None, trackAPI=None, albumAPI_gw=None, albumAPI=None, playlistAPI=None):
-        if id:
-            if not trackAPI_gw: trackAPI_gw = dz.gw.get_track_with_fallback(id)
+        if id and not trackAPI_gw: trackAPI_gw = dz.gw.get_track_with_fallback(id)
         elif not trackAPI_gw: raise NoDataToParse
         if not trackAPI:
             try: trackAPI = dz.api.get_track(trackAPI_gw['SNG_ID'])
@@ -110,15 +106,15 @@ class Track:
             self.parseLocalTrackData(trackAPI_gw)
         else:
             self.retriveFilesizes(dz)
-
             self.parseTrackGW(trackAPI_gw)
+
             # Get Lyrics data
             if not "LYRICS" in trackAPI_gw and self.lyrics.id != "0":
                 try: trackAPI_gw["LYRICS"] = dz.gw.get_track_lyrics(self.id)
                 except GWAPIError: self.lyrics.id = "0"
             if self.lyrics.id != "0": self.lyrics.parseLyrics(trackAPI_gw["LYRICS"])
 
-            # Parse Album data
+            # Parse Album Data
             self.album = Album(
                 id = trackAPI_gw['ALB_ID'],
                 title = trackAPI_gw['ALB_TITLE'],
@@ -161,7 +157,7 @@ class Track:
         if not len(self.artist['Main']):
             self.artist['Main'] = [self.mainArtist['name']]
 
-        self.singleDownload = trackAPI_gw.get('SINGLE_TRACK', False)
+        self.singleDownload = trackAPI_gw.get('SINGLE_TRACK', False) # TODO: To change
         self.position = trackAPI_gw.get('POSITION')
 
         # Add playlist data if track is in a playlist
@@ -184,16 +180,16 @@ class Track:
         self.artist = {
             'Main': [trackAPI_gw['ART_NAME']]
         }
+        self.date = Date()
         self.album.artist = self.artist
         self.album.artists = self.artists
         self.album.date = self.date
         self.album.mainArtist = self.mainArtist
-        self.date = Date()
 
     def parseTrackGW(self, trackAPI_gw):
         self.title = trackAPI_gw['SNG_TITLE'].strip()
-        if trackAPI_gw.get('VERSION') and not trackAPI_gw['VERSION'] in trackAPI_gw['SNG_TITLE']:
-            self.title += " " + trackAPI_gw['VERSION'].strip()
+        if trackAPI_gw.get('VERSION') and not trackAPI_gw['VERSION'].strip() in this.title:
+            self.title += f" {trackAPI_gw['VERSION'].strip()}"
 
         self.discNumber = trackAPI_gw.get('DISK_NUMBER')
         self.explicit = bool(int(trackAPI_gw.get('EXPLICIT_LYRICS', "0")))
@@ -215,7 +211,7 @@ class Track:
             day = trackAPI_gw["PHYSICAL_RELEASE_DATE"][8:10]
             month = trackAPI_gw["PHYSICAL_RELEASE_DATE"][5:7]
             year = trackAPI_gw["PHYSICAL_RELEASE_DATE"][0:4]
-            self.date = Date(year, month, day)
+            self.date = Date(day, month, year)
 
     def parseTrack(self, trackAPI):
         self.bpm = trackAPI['bpm']
@@ -250,8 +246,8 @@ class Track:
         return removeFeatures(self.title)
 
     def getFeatTitle(self):
-        if self.featArtistsString and not "(feat." in self.title.lower():
-            return self.title + " ({})".format(self.featArtistsString)
+        if self.featArtistsString and not "feat." in self.title.lower():
+            return f"{self.title} ({self.featArtistsString})"
         return self.title
 
     def generateMainFeatStrings(self):

@@ -1,33 +1,18 @@
 class IDownloadObject:
-    def __init__(self, type=None, id=None, bitrate=None, title=None, artist=None, cover=None, explicit=False, size=None, dictItem=None):
-        if dictItem:
-            self.type = dictItem['type']
-            self.id = dictItem['id']
-            self.bitrate = dictItem['bitrate']
-            self.title = dictItem['title']
-            self.artist = dictItem['artist']
-            self.cover = dictItem['cover']
-            self.explicit = dictItem.get('explicit', False)
-            self.size = dictItem['size']
-            self.downloaded = dictItem['downloaded']
-            self.failed = dictItem['failed']
-            self.progress = dictItem['progress']
-            self.errors = dictItem['errors']
-            self.files = dictItem['files']
-        else:
-            self.type = type
-            self.id = id
-            self.bitrate = bitrate
-            self.title = title
-            self.artist = artist
-            self.cover = cover
-            self.explicit = explicit
-            self.size = size
-            self.downloaded = 0
-            self.failed = 0
-            self.progress = 0
-            self.errors = []
-            self.files = []
+    def __init__(self, obj):
+        self.type = obj['type']
+        self.id = obj['id']
+        self.bitrate = obj['bitrate']
+        self.title = obj['title']
+        self.artist = obj['artist']
+        self.cover = obj['cover']
+        self.explicit = obj.get('explicit', False)
+        self.size = obj['size']
+        self.downloaded = obj.get('downloaded', 0)
+        self.failed = obj.get('failed', 0)
+        self.progress = obj.get('progress', 0)
+        self.errors = obj.get('errors', [])
+        self.files = obj.get('files', [])
         self.progressNext = 0
         self.uuid = f"{self.type}_{self.id}_{self.bitrate}"
         self.ack = None
@@ -76,17 +61,10 @@ class IDownloadObject:
             if interface: interface.send("updateQueue", {'uuid': self.uuid, 'progress': self.progress})
 
 class Single(IDownloadObject):
-    def __init__(self, type=None, id=None, bitrate=None, title=None, artist=None, cover=None, explicit=False, trackAPI_gw=None, trackAPI=None, albumAPI=None, dictItem=None):
-        if dictItem:
-            super().__init__(dictItem=dictItem)
-            self.single = dictItem['single']
-        else:
-            super().__init__(type, id, bitrate, title, artist, cover, explicit, 1)
-            self.single = {
-                'trackAPI_gw': trackAPI_gw,
-                'trackAPI': trackAPI,
-                'albumAPI': albumAPI
-            }
+    def __init__(self, obj):
+        super().__init__(obj)
+        self.size = 1
+        self.single = obj['single']
         self.__type__ = "Single"
 
     def toDict(self):
@@ -103,17 +81,9 @@ class Single(IDownloadObject):
         self.updateProgress(interface)
 
 class Collection(IDownloadObject):
-    def __init__(self, type=None, id=None, bitrate=None, title=None, artist=None, cover=None, explicit=False, size=None, tracks_gw=None, albumAPI=None, playlistAPI=None, dictItem=None):
-        if dictItem:
-            super().__init__(dictItem=dictItem)
-            self.collection = dictItem['collection']
-        else:
-            super().__init__(type, id, bitrate, title, artist, cover, explicit, size)
-            self.collection = {
-                'tracks_gw': tracks_gw,
-                'albumAPI': albumAPI,
-                'playlistAPI': playlistAPI
-            }
+    def __init__(self, obj):
+        super().__init__(obj)
+        self.collection = obj['collection']
         self.__type__ = "Collection"
 
     def toDict(self):
@@ -130,15 +100,10 @@ class Collection(IDownloadObject):
         self.updateProgress(interface)
 
 class Convertable(Collection):
-    def __init__(self, type=None, id=None, bitrate=None, title=None, artist=None, cover=None, explicit=False, size=None, plugin=None, conversion_data=None, dictItem=None):
-        if dictItem:
-            super().__init__(dictItem=dictItem)
-            self.plugin = dictItem['plugin']
-            self.conversion_data = dictItem['conversion_data']
-        else:
-            super().__init__(type, id, bitrate, title, artist, cover, explicit, size)
-            self.plugin = plugin
-            self.conversion_data = conversion_data
+    def __init__(self, obj):
+        super().__init__(obj)
+        self.plugin = obj['plugin']
+        self.conversion_data = obj['conversion_data']
         self.__type__ = "Convertable"
 
     def toDict(self):

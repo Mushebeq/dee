@@ -23,13 +23,13 @@ def parseLink(link):
 
     if '/track' in link:
         type = 'track'
-        id = link[link.rfind("/") + 1:]
+        id = re.search("\/track\/(.+)", link).group(1)
     elif '/playlist' in link:
         type = 'playlist'
         id = re.search("\/playlist\/(\d+)", link).group(1)
     elif '/album' in link:
         type = 'album'
-        id = link[link.rfind("/") + 1:]
+        id = re.search("\/album\/(.+)", link).group(1)
     elif re.search("\/artist\/(\d+)\/top_track", link):
         type = 'artist_top'
         id = re.search("\/artist\/(\d+)\/top_track", link).group(1)
@@ -42,7 +42,7 @@ def parseLink(link):
 
     return (link, type, id)
 
-def generateDownloadItem(dz, link, bitrate):
+def generateDownloadObject(dz, link, bitrate):
     (link, type, id) = parseLink(link)
 
     if type == None or id == None: return None
