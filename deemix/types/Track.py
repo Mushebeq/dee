@@ -1,5 +1,6 @@
-import requests
 from time import sleep
+import re
+import requests
 
 from deezer.gw import GWAPIError
 from deezer.api import APIError
@@ -14,9 +15,11 @@ from deemix.types.Playlist import Playlist
 from deemix.types.Lyrics import Lyrics
 from deemix.types import VARIOUS_ARTISTS
 
+from deemix.settings import FeaturesOption
+
 class Track:
-    def __init__(self, id="0", name=""):
-        self.id = id
+    def __init__(self, sng_id="0", name=""):
+        self.id = sng_id
         self.title = name
         self.MD5 = ""
         self.mediaVersion = ""
@@ -82,9 +85,9 @@ class Track:
             result_json = site.json()
         except:
             sleep(2)
-            return self.retriveFilesizes(dz)
+            self.retriveFilesizes(dz)
         if len(result_json['error']):
-            raise APIError(json.dumps(result_json['error']))
+            raise APIError(result_json.dumps(result_json['error']))
         response = result_json.get("results")
         filesizes = {}
         for key, value in response.items():
@@ -116,7 +119,7 @@ class Track:
 
             # Parse Album Data
             self.album = Album(
-                id = trackAPI_gw['ALB_ID'],
+                alb_id = trackAPI_gw['ALB_ID'],
                 title = trackAPI_gw['ALB_TITLE'],
                 pic_md5 = trackAPI_gw.get('ALB_PICTURE')
             )
@@ -157,7 +160,7 @@ class Track:
         if not len(self.artist['Main']):
             self.artist['Main'] = [self.mainArtist['name']]
 
-        self.singleDownload = trackAPI_gw.get('SINGLE_TRACK', False) # TODO: To change
+        self.singleDownload = trackAPI_gw.get('SINGLE_TRACK', False) # TODO: Change
         self.position = trackAPI_gw.get('POSITION')
 
         # Add playlist data if track is in a playlist
@@ -173,7 +176,7 @@ class Track:
         self.album = Album(title=trackAPI_gw['ALB_TITLE'])
         self.album.pic = Picture(
             md5 = trackAPI_gw.get('ALB_PICTURE', ""),
-            type = "cover"
+            pic_type = "cover"
         )
         self.mainArtist = Artist(name=trackAPI_gw['ART_NAME'])
         self.artists = [trackAPI_gw['ART_NAME']]
@@ -188,7 +191,7 @@ class Track:
 
     def parseTrackGW(self, trackAPI_gw):
         self.title = trackAPI_gw['SNG_TITLE'].strip()
-        if trackAPI_gw.get('VERSION') and not trackAPI_gw['VERSION'].strip() in this.title:
+        if trackAPI_gw.get('VERSION') and not trackAPI_gw['VERSION'].strip() in self.title:
             self.title += f" {trackAPI_gw['VERSION'].strip()}"
 
         self.discNumber = trackAPI_gw.get('DISK_NUMBER')
@@ -202,7 +205,7 @@ class Track:
         self.lyrics = Lyrics(trackAPI_gw.get('LYRICS_ID', "0"))
 
         self.mainArtist = Artist(
-            id = trackAPI_gw['ART_ID'],
+            art_id = trackAPI_gw['ART_ID'],
             name = trackAPI_gw['ART_NAME'],
             pic_md5 = trackAPI_gw.get('ART_PICTURE')
         )
@@ -257,7 +260,6 @@ class Track:
             self.featArtistsString = "feat. "+andCommaConcat(self.artist['Featured'])
 
     def applySettings(self, settings, TEMPDIR, embeddedImageFormat):
-        from deemix.settings import FeaturesOption
 
         # Check if should save the playlist as a compilation
         if self.playlist and settings['tags']['savePlaylistAsCompilation']:
@@ -269,7 +271,8 @@ class Track:
             ext = self.album.embeddedCoverURL[-4:]
             if ext[0] != ".": ext = ".jpg" # Check for Spotify images
 
-            self.album.embeddedCoverPath = TEMPDIR / f"pl{trackAPI_gw['_EXTRA_PLAYLIST']['id']}_{settings['embeddedArtworkSize']}{ext}"
+            # TODO: FIX
+            # self.album.embeddedCoverPath = TEMPDIR / f"pl{trackAPI_gw['_EXTRA_PLAYLIST']['id']}_{settings['embeddedArtworkSize']}{ext}"
         else:
             if self.album.date: self.date = self.album.date
             self.album.embeddedCoverURL = self.album.pic.generatePictureURL(settings['embeddedArtworkSize'], embeddedImageFormat)
@@ -290,7 +293,7 @@ class Track:
                 self.album.artists.insert(0, artist.name)
 
             if isMainArtist or artist.name not in self.album.artist['Main'] and not isMainArtist:
-                if not artist.role in self.album.artist:
+                if artist.role not in self.album.artist:
                     self.album.artist[artist.role] = []
                 self.album.artist[artist.role].insert(0, artist.name)
         self.album.mainArtist.save = not self.album.mainArtist.isVariousArtists() or settings['albumVariousArtists'] and self.album.mainArtist.isVariousArtists()
@@ -319,9 +322,9 @@ class Track:
             self.mainArtist.name = changeCase(self.mainArtist.name, settings['artistCasing'])
             for i, artist in enumerate(self.artists):
                 self.artists[i] = changeCase(artist, settings['artistCasing'])
-            for type in self.artist:
-                for i, artist in enumerate(self.artist[type]):
-                    self.artist[type][i] = changeCase(artist, settings['artistCasing'])
+            for art_type in self.artist:
+                for i, artist in enumerate(self.artist[art_type]):
+                    self.artist[art_type][i] = changeCase(artist, settings['artistCasing'])
             self.generateMainFeatStrings()
 
         # Generate artist tag
@@ -343,7 +346,6 @@ class Track:
 
 class TrackError(Exception):
     """Base class for exceptions in this module."""
-    pass
 
 class AlbumDoesntExists(TrackError):
     pass

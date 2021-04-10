@@ -7,8 +7,8 @@ from deemix.types.Picture import Picture
 from deemix.types import VARIOUS_ARTISTS
 
 class Album:
-    def __init__(self, id="0", title="", pic_md5=""):
-        self.id = id
+    def __init__(self, alb_id="0", title="", pic_md5=""):
+        self.id = alb_id
         self.title = title
         self.pic = Picture(md5=pic_md5, type="cover")
         self.artist = {"Main": []}
@@ -24,10 +24,14 @@ class Album:
         self.genre = []
         self.barcode = "Unknown"
         self.label = "Unknown"
+        self.copyright = None
         self.recordType = "album"
         self.bitrate = 0
         self.rootArtist = None
         self.variousArtists = None
+
+        self.playlistId = None
+        self.owner = None
 
     def parseAlbum(self, albumAPI):
         self.title = albumAPI['title']
@@ -80,7 +84,7 @@ class Album:
             day = albumAPI["release_date"][8:10]
             month = albumAPI["release_date"][5:7]
             year = albumAPI["release_date"][0:4]
-            self.date = Date(year, month, day)
+            self.date = Date(day, month, year)
 
         self.discTotal = albumAPI.get('nb_disk')
         self.copyright = albumAPI.get('copyright')
@@ -115,7 +119,7 @@ class Album:
             day = albumAPI_gw["PHYSICAL_RELEASE_DATE"][8:10]
             month = albumAPI_gw["PHYSICAL_RELEASE_DATE"][5:7]
             year = albumAPI_gw["PHYSICAL_RELEASE_DATE"][0:4]
-            self.date = Date(year, month, day)
+            self.date = Date(day, month, year)
 
     def makePlaylistCompilation(self, playlist):
         self.variousArtists = playlist.variousArtists
@@ -136,8 +140,9 @@ class Album:
         self.pic = playlist.pic
 
     def removeDuplicateArtists(self):
+        """Removes duplicate artists for both artist array and artists dict"""
         (self.artist, self.artists) = removeDuplicateArtists(self.artist, self.artists)
 
-    # Removes featuring from the album name
     def getCleanTitle(self):
+        """Removes featuring from the album name"""
         return removeFeatures(self.title)

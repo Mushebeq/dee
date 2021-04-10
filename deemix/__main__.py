@@ -73,4 +73,4 @@ def download(url, bitrate, portable, path):
     click.echo("All done!")
 
 if __name__ == '__main__':
-    download()
+    download() # pylint: disable=E1120

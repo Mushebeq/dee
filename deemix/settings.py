@@ -4,16 +4,16 @@ from os import makedirs
 from deezer import TrackFormats
 import deemix.utils.localpaths as localpaths
 
-"""Should the lib overwrite files?"""
 class OverwriteOption():
+    """Should the lib overwrite files?"""
     OVERWRITE = 'y' # Yes, overwrite the file
     DONT_OVERWRITE = 'n' # No, don't overwrite the file
     DONT_CHECK_EXT = 'e' # No, and don't check for extensions
     KEEP_BOTH = 'b' # No, and keep both files
     ONLY_TAGS = 't' # Overwrite only the tags
 
-"""What should I do with featured artists?"""
 class FeaturesOption():
+    """What should I do with featured artists?"""
     NO_CHANGE = "0" # Do nothing
     REMOVE_TITLE = "1" # Remove from track title
     REMOVE_TITLE_ALBUM = "3" # Remove from track title and album title
@@ -121,13 +121,13 @@ def loadSettings(configFolder=None):
 
 def checkSettings(settings):
     changes = 0
-    for set in DEFAULTS:
-        if not set in settings or type(settings[set]) != type(DEFAULTS[set]):
-            settings[set] = DEFAULTS[set]
+    for i_set in DEFAULTS:
+        if not i_set in settings or not isinstance(settings[i_set], DEFAULTS[i_set]):
+            settings[i_set] = DEFAULTS[i_set]
             changes += 1
-    for set in DEFAULTS['tags']:
-        if not set in settings['tags'] or type(settings['tags'][set]) != type(DEFAULTS['tags'][set]):
-            settings['tags'][set] = DEFAULTS['tags'][set]
+    for i_set in DEFAULTS['tags']:
+        if not i_set in settings['tags'] or not isinstance(settings['tags'][i_set], DEFAULTS['tags'][i_set]):
+            settings['tags'][i_set] = DEFAULTS['tags'][i_set]
             changes += 1
     if settings['downloadLocation'] == "":
         settings['downloadLocation'] = DEFAULTS['downloadLocation']

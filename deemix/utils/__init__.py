@@ -9,30 +9,28 @@ def getBitrateNumberFromText(txt):
     txt = str(txt).lower()
     if txt in ['flac', 'lossless', '9']:
         return TrackFormats.FLAC
-    elif txt in ['mp3', '320', '3']:
+    if txt in ['mp3', '320', '3']:
         return TrackFormats.MP3_320
-    elif txt in ['128', '1']:
+    if txt in ['128', '1']:
         return TrackFormats.MP3_128
-    elif txt in ['360', '360_hq', '15']:
+    if txt in ['360', '360_hq', '15']:
         return TrackFormats.MP4_RA3
-    elif txt in ['360_mq', '14']:
+    if txt in ['360_mq', '14']:
         return TrackFormats.MP4_RA2
-    elif txt in ['360_lq', '13']:
+    if txt in ['360_lq', '13']:
         return TrackFormats.MP4_RA1
-    else:
-        return None
+    return None
 
-def changeCase(str, type):
-    if type == "lower":
-        return str.lower()
-    elif type == "upper":
-        return str.upper()
-    elif type == "start":
-        return string.capwords(str)
-    elif type == "sentence":
-        return str.capitalize()
-    else:
-        return str
+def changeCase(txt, case_type):
+    if case_type == "lower":
+        return txt.lower()
+    if case_type == "upper":
+        return txt.upper()
+    if case_type == "start":
+        return string.capwords(txt)
+    if case_type == "sentence":
+        return txt.capitalize()
+    return str
 
 def removeFeatures(title):
     clean = title

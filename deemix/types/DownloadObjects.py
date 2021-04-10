@@ -1,4 +1,5 @@
 class IDownloadObject:
+    """DownloadObject interface"""
     def __init__(self, obj):
         self.type = obj['type']
         self.id = obj['id']
@@ -50,9 +51,9 @@ class IDownloadObject:
     def getSlimmedDict(self):
         light = self.toDict()
         propertiesToDelete = ['single', 'collection', 'convertable']
-        for property in propertiesToDelete:
-            if property in light:
-                del light[property]
+        for prop in propertiesToDelete:
+            if prop in light:
+                del light[prop]
         return light
 
     def updateProgress(self, interface=None):

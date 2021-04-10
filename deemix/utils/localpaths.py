@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 import os
+if os.name == 'nt':
+    import winreg # pylint: disable=E0401
 
 homedata = Path.home()
 userdata = ""
@@ -23,7 +25,6 @@ if os.getenv("DEEMIX_MUSIC_DIR"):
 elif os.getenv("XDG_MUSIC_DIR"):
     musicdata = Path(os.getenv("XDG_MUSIC_DIR")) / "deemix Music"
 elif os.name == 'nt':
-    import winreg
     sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
     music_guid = '{4BD8D571-6D19-48D3-BE97-422220080E43}'
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:

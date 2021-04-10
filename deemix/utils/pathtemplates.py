@@ -52,17 +52,16 @@ def antiDot(string):
     return string
 
 
-def pad(num, max, settings):
+def pad(num, max_val, settings):
     if int(settings['paddingSize']) == 0:
-        paddingSize = len(str(max))
+        paddingSize = len(str(max_val))
     else:
         paddingSize = len(str(10 ** (int(settings['paddingSize']) - 1)))
     if paddingSize == 1:
         paddingSize = 2
     if settings['padTracks']:
         return str(num).zfill(paddingSize)
-    else:
-        return str(num)
+    return str(num)
 
 def generateFilename(track, settings, template):
     filename = template or "%artist% - %title%"

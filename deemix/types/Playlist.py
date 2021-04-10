@@ -32,7 +32,7 @@ class Playlist:
             md5 = url[url.find(picType+'/') + len(picType)+1:-24]
             self.pic = Picture(
                 md5 = md5,
-                type = picType
+                pic_type = picType
             )
         else:
             self.pic = Picture(url = playlistAPI['picture_xl'])
@@ -41,7 +41,7 @@ class Playlist:
             pic_md5 = playlistAPI['various_artist']['picture_small']
             pic_md5 = pic_md5[pic_md5.find('artist/') + 7:-24]
             self.variousArtists = Artist(
-                id = playlistAPI['various_artist']['id'],
+                art_id = playlistAPI['various_artist']['id'],
                 name = playlistAPI['various_artist']['name'],
                 role = "Main",
                 pic_md5 = pic_md5

@@ -1,6 +1,6 @@
 class Lyrics:
-    def __init__(self, id="0"):
-        self.id = id
+    def __init__(self, lyr_id="0"):
+        self.id = lyr_id
         self.sync = ""
         self.unsync = ""
         self.syncID3 = []
@@ -11,7 +11,7 @@ class Lyrics:
             syncLyricsJson = lyricsAPI["LYRICS_SYNC_JSON"]
             timestamp = ""
             milliseconds = 0
-            for line in range(len(syncLyricsJson)):
+            for line in enumerate(syncLyricsJson):
                 if syncLyricsJson[line]["line"] != "":
                     timestamp = syncLyricsJson[line]["lrc_timestamp"]
                     milliseconds = int(syncLyricsJson[line]["milliseconds"])

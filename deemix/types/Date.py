@@ -1,4 +1,4 @@
-class Date(object):
+class Date:
     def __init__(self, day="00", month="00", year="XXXX"):
         self.year = year
         self.month = month

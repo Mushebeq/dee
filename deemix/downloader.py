@@ -1,34 +1,32 @@
-import requests
-from requests import get
-
 from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 
 from os.path import sep as pathSep
+from os import makedirs, system as execute
 from pathlib import Path
 from shlex import quote
-import re
 import errno
 
-from ssl import SSLError
-from urllib3.exceptions import SSLError as u3SSLError
-from os import makedirs
+import logging
+from tempfile import gettempdir
 
+import requests
+from requests import get
+
+from urllib3.exceptions import SSLError as u3SSLError
+
+from mutagen.flac import FLACNoHeaderError, error as FLACError
+
+from deezer import TrackFormats
+from deemix import USER_AGENT_HEADER
 from deemix.types.DownloadObjects import Single, Collection
 from deemix.types.Track import Track, AlbumDoesntExists
 from deemix.utils.pathtemplates import generateFilename, generateFilepath, settingsRegexAlbum, settingsRegexArtist, settingsRegexPlaylistFile
-from deezer import TrackFormats
-from deemix import USER_AGENT_HEADER
 from deemix.taggers import tagID3, tagFLAC
 from deemix.decryption import generateUnencryptedStreamURL, streamUnencryptedTrack
 from deemix.settings import OverwriteOption
 
-from mutagen.flac import FLACNoHeaderError, error as FLACError
-
-import logging
 logger = logging.getLogger('deemix')
-
-from tempfile import gettempdir
 
 TEMPDIR = Path(gettempdir()) / 'deemix-imgs'
 if not TEMPDIR.is_dir(): makedirs(TEMPDIR)
@@ -71,23 +69,22 @@ def downloadImage(url, path, overwrite=OverwriteOption.DONT_OVERWRITE):
                 pictureUrl = url[len(urlBase):]
                 pictureSize = int(pictureUrl[:pictureUrl.find("x")])
                 if pictureSize > 1200:
-                    logger.warn("Couldn't download "+str(pictureSize)+"x"+str(pictureSize)+" image, falling back to 1200x1200")
+                    logger.warning("Couldn't download %sx%s image, falling back to 1200x1200", pictureSize, pictureSize)
                     sleep(1)
                     return downloadImage(urlBase+pictureUrl.replace(str(pictureSize)+"x"+str(pictureSize), '1200x1200'), path, overwrite)
-            logger.error("Image not found: "+url)
+            logger.error("Image not found: %s", url)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, u3SSLError) as e:
-            logger.error("Couldn't download Image, retrying in 5 seconds...: "+url+"\n")
+            logger.error("Couldn't download Image, retrying in 5 seconds...: %s", url)
             sleep(5)
             return downloadImage(url, path, overwrite)
         except OSError as e:
-            if e.errno == errno.ENOSPC: raise DownloadFailed("noSpaceLeft")
-            else: logger.exception(f"Error while downloading an image, you should report this to the developers: {str(e)}")
+            if e.errno == errno.ENOSPC: raise DownloadFailed("noSpaceLeft") from e
+            logger.exception("Error while downloading an image, you should report this to the developers: %s", e)
         except Exception as e:
-            logger.exception(f"Error while downloading an image, you should report this to the developers: {str(e)}")
+            logger.exception("Error while downloading an image, you should report this to the developers: %s", e)
         if path.is_file(): path.unlink()
         return None
-    else:
-        return path
+    return path
 
 def getPreferredBitrate(track, preferredBitrate, shouldFallback, downloadObjectUUID=None, interface=None):
     if track.localTrack: return TrackFormats.LOCAL
@@ -116,36 +113,36 @@ def getPreferredBitrate(track, preferredBitrate, shouldFallback, downloadObjectU
         formats = formats_non_360
 
     for formatNumber, formatName in formats.items():
-        if formatNumber <= int(preferredBitrate):
-            if f"FILESIZE_{formatName}" in track.filesizes:
-                if int(track.filesizes[f"FILESIZE_{formatName}"]) != 0: return formatNumber
-                if not track.filesizes[f"FILESIZE_{formatName}_TESTED"]:
-                    request = requests.head(
-                        generateUnencryptedStreamURL(track.id, track.MD5, track.mediaVersion, formatNumber),
-                        headers={'User-Agent': USER_AGENT_HEADER},
-                        timeout=30
-                    )
-                    try:
-                        request.raise_for_status()
-                        return formatNumber
-                    except requests.exceptions.HTTPError: # if the format is not available, Deezer returns a 403 error
-                        pass
-            if not shouldFallback:
-                raise PreferredBitrateNotFound
-            else:
-                if not falledBack:
-                    falledBack = True
-                    logger.info(f"[{track.mainArtist.name} - {track.title}] Fallback to lower bitrate")
-                    if interface and downloadObjectUUID:
-                        interface.send('queueUpdate', {
-                            'uuid': downloadObjectUUID,
-                            'bitrateFallback': True,
-                            'data': {
-                                'id': track.id,
-                                'title': track.title,
-                                'artist': track.mainArtist.name
-                            },
-                        })
+        if formatNumber >= int(preferredBitrate): continue
+        if f"FILESIZE_{formatName}" in track.filesizes:
+            if int(track.filesizes[f"FILESIZE_{formatName}"]) != 0: return formatNumber
+            if not track.filesizes[f"FILESIZE_{formatName}_TESTED"]:
+                request = requests.head(
+                    generateUnencryptedStreamURL(track.id, track.MD5, track.mediaVersion, formatNumber),
+                    headers={'User-Agent': USER_AGENT_HEADER},
+                    timeout=30
+                )
+                try:
+                    request.raise_for_status()
+                    return formatNumber
+                except requests.exceptions.HTTPError: # if the format is not available, Deezer returns a 403 error
+                    pass
+
+        if not shouldFallback:
+            raise PreferredBitrateNotFound
+        if not falledBack:
+            falledBack = True
+            logger.info("%s Fallback to lower bitrate", f"[{track.mainArtist.name} - {track.title}]")
+            if interface and downloadObjectUUID:
+                interface.send('queueUpdate', {
+                    'uuid': downloadObjectUUID,
+                    'bitrateFallback': True,
+                    'data': {
+                        'id': track.id,
+                        'title': track.title,
+                        'artist': track.mainArtist.name
+                    },
+                })
     if is360format: raise TrackNot360
     return TrackFormats.DEFAULT
 
@@ -178,9 +175,11 @@ class Downloader:
         result = {}
         if trackAPI_gw['SNG_ID'] == "0": raise DownloadFailed("notOnDeezer")
 
+        itemName = f"[{trackAPI_gw['ART_NAME']} - {trackAPI_gw['SNG_TITLE']}]"
+
         # Create Track object
         if not track:
-            logger.info(f"[{trackAPI_gw['ART_NAME']} - {trackAPI_gw['SNG_TITLE']}] Getting the tags")
+            logger.info("%s Getting the tags", itemName)
             try:
                 track = Track().parseData(
                     dz=self.dz,
@@ -189,8 +188,10 @@ class Downloader:
                     albumAPI=albumAPI,
                     playlistAPI=playlistAPI
                 )
-            except AlbumDoesntExists:
-                raise DownloadError('albumDoesntExists')
+            except AlbumDoesntExists as e:
+                raise DownloadError('albumDoesntExists') from e
+
+        itemName = f"[{track.mainArtist.name} - {track.title}]"
 
         # Check if track not yet encoded
         if track.MD5 == '': raise DownloadFailed("notEncoded", track)
@@ -203,16 +204,16 @@ class Downloader:
                 self.settings['fallbackBitrate'],
                 self.downloadObject.uuid, self.interface
             )
-        except PreferredBitrateNotFound:
-            raise DownloadFailed("wrongBitrate", track)
-        except TrackNot360:
-            raise DownloadFailed("no360RA")
+        except PreferredBitrateNotFound as e:
+            raise DownloadFailed("wrongBitrate", track) from e
+        except TrackNot360 as e:
+            raise DownloadFailed("no360RA") from e
         track.selectedFormat = selectedFormat
         track.album.bitrate = selectedFormat
 
         # Generate covers URLs
         embeddedImageFormat = f'jpg-{self.settings["jpegImageQuality"]}'
-        if self.settings['embeddedArtworkPNG']: imageFormat = 'png'
+        if self.settings['embeddedArtworkPNG']: embeddedImageFormat = 'png'
 
         track.applySettings(self.settings, TEMPDIR, embeddedImageFormat)
 
@@ -233,49 +234,49 @@ class Downloader:
             result['filename'] = str(writepath)[len(str(extrasPath))+ len(pathSep):]
 
         # Download and cache coverart
-        logger.info(f"[{track.mainArtist.name} - {track.title}] Getting the album cover")
+        logger.info("%s Getting the album cover", itemName)
         track.album.embeddedCoverPath = downloadImage(track.album.embeddedCoverURL, track.album.embeddedCoverPath)
 
         # Save local album art
         if coverPath:
             result['albumURLs'] = []
-            for format in self.settings['localArtworkFormat'].split(","):
-                if format in ["png","jpg"]:
-                    extendedFormat = format
+            for pic_format in self.settings['localArtworkFormat'].split(","):
+                if pic_format in ["png","jpg"]:
+                    extendedFormat = pic_format
                     if extendedFormat == "jpg": extendedFormat += f"-{self.settings['jpegImageQuality']}"
                     url = track.album.pic.generatePictureURL(self.settings['localArtworkSize'], extendedFormat)
                     if self.settings['tags']['savePlaylistAsCompilation'] \
                         and track.playlist \
                         and track.playlist.pic.staticUrl \
-                        and not format.startswith("jpg"):
-                            continue
-                    result['albumURLs'].append({'url': url, 'ext': format})
+                        and not pic_format.startswith("jpg"):
+                        continue
+                    result['albumURLs'].append({'url': url, 'ext': pic_format})
             result['albumPath'] = coverPath
             result['albumFilename'] = f"{settingsRegexAlbum(self.settings['coverImageTemplate'], track.album, self.settings, track.playlist)}"
 
         # Save artist art
         if artistPath:
             result['artistURLs'] = []
-            for format in self.settings['localArtworkFormat'].split(","):
-                if format in ["png","jpg"]:
-                    extendedFormat = format
+            for pic_format in self.settings['localArtworkFormat'].split(","):
+                if pic_format in ["png","jpg"]:
+                    extendedFormat = pic_format
                     if extendedFormat == "jpg": extendedFormat += f"-{self.settings['jpegImageQuality']}"
                     url = track.album.mainArtist.pic.generatePictureURL(self.settings['localArtworkSize'], extendedFormat)
-                    if track.album.mainArtist.pic.md5 == "" and not format.startswith("jpg"): continue
-                    result['artistURLs'].append({'url': url, 'ext': format})
+                    if track.album.mainArtist.pic.md5 == "" and not pic_format.startswith("jpg"): continue
+                    result['artistURLs'].append({'url': url, 'ext': pic_format})
             result['artistPath'] = artistPath
             result['artistFilename'] = f"{settingsRegexArtist(self.settings['artistImageTemplate'], track.album.mainArtist, self.settings, rootArtist=track.album.rootArtist)}"
 
         # Save playlist art
         if track.playlist:
-            if not len(self.playlistURLs):
-                for format in self.settings['localArtworkFormat'].split(","):
-                    if format in ["png","jpg"]:
-                        extendedFormat = format
+            if self.playlistURLs == []:
+                for pic_format in self.settings['localArtworkFormat'].split(","):
+                    if pic_format in ["png","jpg"]:
+                        extendedFormat = pic_format
                         if extendedFormat == "jpg": extendedFormat += f"-{self.settings['jpegImageQuality']}"
                         url = track.playlist.pic.generatePictureURL(self.settings['localArtworkSize'], extendedFormat)
-                        if track.playlist.pic.staticUrl and not format.startswith("jpg"): continue
-                        self.playlistURLs.append({'url': url, 'ext': format})
+                        if track.playlist.pic.staticUrl and not pic_format.startswith("jpg"): continue
+                        self.playlistURLs.append({'url': url, 'ext': pic_format})
             if not self.playlistCoverName:
                 track.playlist.bitrate = selectedFormat
                 track.playlist.dateString = track.playlist.date.format(self.settings['dateFormat'])
@@ -309,26 +310,26 @@ class Downloader:
             writepath = Path(currentFilename)
 
         if not trackAlreadyDownloaded or self.settings['overwriteFile'] == OverwriteOption.OVERWRITE:
-            logger.info(f"[{track.mainArtist.name} - {track.title}] Downloading the track")
+            logger.info("%s Downloading the track", itemName)
             track.downloadUrl = generateUnencryptedStreamURL(track.id, track.MD5, track.mediaVersion, track.selectedFormat)
 
             def downloadMusic(track, trackAPI_gw):
                 try:
                     with open(writepath, 'wb') as stream:
                         streamUnencryptedTrack(stream, track, downloadObject=self.downloadObject, interface=self.interface)
-                except DownloadCancelled:
+                except DownloadCancelled as e:
                     if writepath.is_file(): writepath.unlink()
-                    raise DownloadCancelled
-                except (requests.exceptions.HTTPError, DownloadEmpty):
+                    raise e
+                except (requests.exceptions.HTTPError, DownloadEmpty) as e:
                     if writepath.is_file(): writepath.unlink()
                     if track.fallbackID != "0":
-                        logger.warn(f"[{track.mainArtist.name} - {track.title}] Track not available, using fallback id")
+                        logger.warning("%s Track not available, using fallback id", itemName)
                         newTrack = self.dz.gw.get_track_with_fallback(track.fallbackID)
                         track.parseEssentialData(newTrack)
                         track.retriveFilesizes(self.dz)
                         return False
-                    elif not track.searched and self.settings['fallbackSearch']:
-                        logger.warn(f"[{track.mainArtist.name} - {track.title}] Track not available, searching for alternative")
+                    if not track.searched and self.settings['fallbackSearch']:
+                        logger.warning("%s Track not available, searching for alternative", itemName)
                         searchedId = self.dz.api.get_track_id_from_metadata(track.mainArtist.name, track.title, track.album.title)
                         if searchedId != "0":
                             newTrack = self.dz.gw.get_track_with_fallback(searchedId)
@@ -346,25 +347,21 @@ class Downloader:
                                     },
                                 })
                             return False
-                        else:
-                            raise DownloadFailed("notAvailableNoAlternative")
-                    else:
-                        raise DownloadFailed("notAvailable")
+                        raise DownloadFailed("notAvailableNoAlternative") from e
+                    raise DownloadFailed("notAvailable") from e
                 except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
                     if writepath.is_file(): writepath.unlink()
-                    logger.warn(f"[{track.mainArtist.name} - {track.title}] Error while downloading the track, trying again in 5s...")
+                    logger.warning("%s Error while downloading the track, trying again in 5s...", itemName)
                     sleep(5)
                     return downloadMusic(track, trackAPI_gw)
                 except OSError as e:
-                    if e.errno == errno.ENOSPC:
-                        raise DownloadFailed("noSpaceLeft")
-                    else:
-                        if writepath.is_file(): writepath.unlink()
-                        logger.exception(f"[{track.mainArtist.name} - {track.title}] Error while downloading the track, you should report this to the developers: {str(e)}")
-                        raise e
+                    if writepath.is_file(): writepath.unlink()
+                    if e.errno == errno.ENOSPC: raise DownloadFailed("noSpaceLeft") from e
+                    logger.exception("%s Error while downloading the track, you should report this to the developers: %s", itemName, e)
+                    raise e
                 except Exception as e:
                     if writepath.is_file(): writepath.unlink()
-                    logger.exception(f"[{track.mainArtist.name} - {track.title}] Error while downloading the track, you should report this to the developers: {str(e)}")
+                    logger.exception("%s Error while downloading the track, you should report this to the developers: %s", itemName, e)
                     raise e
                 return True
 
@@ -375,12 +372,12 @@ class Downloader:
 
             if not trackDownloaded: return self.download(trackAPI_gw, track=track)
         else:
-            logger.info(f"[{track.mainArtist.name} - {track.title}] Skipping track as it's already downloaded")
+            logger.info("%s Skipping track as it's already downloaded", itemName)
             self.downloadObject.completeTrackProgress(self.interface)
 
         # Adding tags
         if (not trackAlreadyDownloaded or self.settings['overwriteFile'] in [OverwriteOption.ONLY_TAGS, OverwriteOption.OVERWRITE]) and not track.localTrack:
-            logger.info(f"[{track.mainArtist.name} - {track.title}] Applying tags to the track")
+            logger.info("%s Applying tags to the track", itemName)
             if track.selectedFormat in [TrackFormats.MP3_320, TrackFormats.MP3_128, TrackFormats.DEFAULT]:
                 tagID3(writepath, track, self.settings['tags'])
             elif track.selectedFormat ==  TrackFormats.FLAC:
@@ -388,14 +385,14 @@ class Downloader:
                     tagFLAC(writepath, track, self.settings['tags'])
                 except (FLACNoHeaderError, FLACError):
                     if writepath.is_file(): writepath.unlink()
-                    logger.warn(f"[{track.mainArtist.name} - {track.title}] Track not available in FLAC, falling back if necessary")
+                    logger.warning("%s Track not available in FLAC, falling back if necessary", itemName)
                     self.downloadObject.removeTrackProgress(self.interface)
                     track.filesizes['FILESIZE_FLAC'] = "0"
                     track.filesizes['FILESIZE_FLAC_TESTED'] = True
                     return self.download(trackAPI_gw, track=track)
 
         if track.searched: result['searched'] = f"{track.mainArtist.name} - {track.title}"
-        logger.info(f"[{track.mainArtist.name} - {track.title}] Track download completed\n{str(writepath)}")
+        logger.info("%s Track download completed\n%s", itemName, writepath)
         self.downloadObject.downloaded += 1
         self.downloadObject.files.append(str(writepath))
         self.downloadObject.extrasPath = str(self.extrasPath)
@@ -413,19 +410,21 @@ class Downloader:
         if trackAPI_gw.get('VERSION') and trackAPI_gw['VERSION'] not in trackAPI_gw['SNG_TITLE']:
             tempTrack['title'] += f" {trackAPI_gw['VERSION']}".strip()
 
+        itemName = f"[{track.mainArtist.name} - {track.title}]"
+
         try:
             result = self.download(trackAPI_gw, trackAPI, albumAPI, playlistAPI, track)
         except DownloadFailed as error:
             if error.track:
                 track = error.track
                 if track.fallbackID != "0":
-                    logger.warn(f"[{track.mainArtist.name} - {track.title}] {error.message} Using fallback id")
+                    logger.warning("%s %s Using fallback id", itemName, error.message)
                     newTrack = self.dz.gw.get_track_with_fallback(track.fallbackID)
                     track.parseEssentialData(newTrack)
                     track.retriveFilesizes(self.dz)
                     return self.downloadWrapper(trackAPI_gw, trackAPI, albumAPI, playlistAPI, track)
-                elif not track.searched and self.settings['fallbackSearch']:
-                    logger.warn(f"[{track.mainArtist.name} - {track.title}] {error.message} Searching for alternative")
+                if not track.searched and self.settings['fallbackSearch']:
+                    logger.warning("%s %s Searching for alternative", itemName, error.message)
                     searchedId = self.dz.api.get_track_id_from_metadata(track.mainArtist.name, track.title, track.album.title)
                     if searchedId != "0":
                         newTrack = self.dz.gw.get_track_with_fallback(searchedId)
@@ -434,7 +433,7 @@ class Downloader:
                         track.searched = True
                         if self.interface:
                             self.interface.send('queueUpdate', {
-                                'uuid': self.queueItem.uuid,
+                                'uuid': self.downloadObject.uuid,
                                 'searchFallback': True,
                                 'data': {
                                     'id': track.id,
@@ -443,17 +442,16 @@ class Downloader:
                                 },
                             })
                         return self.downloadWrapper(trackAPI_gw, trackAPI, albumAPI, playlistAPI, track)
-                    else:
-                        error.errid += "NoAlternative"
-                        error.message = errorMessages[error.errid]
-            logger.error(f"[{tempTrack['artist']} - {tempTrack['title']}] {error.message}")
+                    error.errid += "NoAlternative"
+                    error.message = errorMessages[error.errid]
+            logger.error("%s %s", itemName, error.message)
             result = {'error': {
-                        'message': error.message,
-                        'errid': error.errid,
-                        'data': tempTrack
-                    }}
+                'message': error.message,
+                'errid': error.errid,
+                'data': tempTrack
+            }}
         except Exception as e:
-            logger.exception(f"[{tempTrack['artist']} - {tempTrack['title']}] {str(e)}")
+            logger.exception("%s %s", itemName, e)
             result = {'error': {
                         'message': str(e),
                         'data': tempTrack
@@ -505,9 +503,9 @@ class Downloader:
         errors = ""
         searched = ""
 
-        for i in range(len(tracks)):
+        for i in enumerate(tracks):
             result = tracks[i].result()
-            if not result: return None # Check if item is cancelled
+            if not result: return # Check if item is cancelled
 
             # Log errors to file
             if result.get('error'):
@@ -558,15 +556,18 @@ class Downloader:
 
 class DownloadError(Exception):
     """Base class for exceptions in this module."""
-    pass
 
 class DownloadFailed(DownloadError):
     def __init__(self, errid, track=None):
+        super().__init__()
         self.errid = errid
         self.message = errorMessages[self.errid]
         self.track = track
 
 class DownloadCancelled(DownloadError):
+    pass
+
+class DownloadEmpty(DownloadError):
     pass
 
 class PreferredBitrateNotFound(DownloadError):
