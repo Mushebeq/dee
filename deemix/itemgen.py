@@ -1,25 +1,11 @@
 import logging
 
 from deemix.types.DownloadObjects import Single, Collection
-from deezer.utils import map_user_playlist
-from deezer.api import APIError
 from deezer.gw import GWAPIError, LyricsStatus
+from deezer.api import APIError
+from deezer.utils import map_user_playlist
 
 logger = logging.getLogger('deemix')
-
-class GenerationError(Exception):
-    def __init__(self, link, message, errid=None):
-        super().__init__()
-        self.link = link
-        self.message = message
-        self.errid = errid
-
-    def toDict(self):
-        return {
-            'link': self.link,
-            'error': self.message,
-            'errid': self.errid
-        }
 
 def generateTrackItem(dz, link_id, bitrate, trackAPI=None, albumAPI=None):
     # Check if is an isrc: url
@@ -27,20 +13,19 @@ def generateTrackItem(dz, link_id, bitrate, trackAPI=None, albumAPI=None):
         try:
             trackAPI = dz.api.get_track(link_id)
         except APIError as e:
-            raise GenerationError("https://deezer.com/track/"+str(link_id), f"Wrong URL: {e}") from e
+            raise GenerationError(f"https://deezer.com/track/{link_id}", str(e)) from e
+
         if 'id' in trackAPI and 'title' in trackAPI:
             link_id = trackAPI['id']
         else:
-            raise GenerationError("https://deezer.com/track/"+str(link_id), "Track ISRC is not available on deezer", "ISRCnotOnDeezer")
+            raise ISRCnotOnDeezer(f"https://deezer.com/track/{link_id}")
+    if not link_id.isdecimal(): raise InvalidID(f"https://deezer.com/track/{link_id}")
 
     # Get essential track info
     try:
         trackAPI_gw = dz.gw.get_track_with_fallback(link_id)
     except GWAPIError as e:
-        message = "Wrong URL"
-        # TODO: FIX
-        # if "DATA_ERROR" in e: message += f": {e['DATA_ERROR']}"
-        raise GenerationError("https://deezer.com/track/"+str(link_id), message) from e
+        raise GenerationError(f"https://deezer.com/track/{link_id}", str(e)) from e
 
     title = trackAPI_gw['SNG_TITLE'].strip()
     if trackAPI_gw.get('VERSION') and trackAPI_gw['VERSION'] not in trackAPI_gw['SNG_TITLE']:
@@ -67,20 +52,24 @@ def generateAlbumItem(dz, link_id, bitrate, rootArtist=None):
     try:
         albumAPI = dz.api.get_album(link_id)
     except APIError as e:
-        raise GenerationError("https://deezer.com/album/"+str(link_id), f"Wrong URL: {e}") from e
+        raise GenerationError(f"https://deezer.com/album/{link_id}", str(e)) from e
 
     if str(link_id).startswith('upc'): link_id = albumAPI['id']
+    if not link_id.isdecimal(): raise InvalidID(f"https://deezer.com/album/{link_id}")
 
     # Get extra info about album
     # This saves extra api calls when downloading
     albumAPI_gw = dz.gw.get_album(link_id)
     albumAPI['nb_disk'] = albumAPI_gw['NUMBER_DISK']
     albumAPI['copyright'] = albumAPI_gw['COPYRIGHT']
+    albumAPI['release_date'] = albumAPI_gw['PHYSICAL_RELEASE_DATE']
     albumAPI['root_artist'] = rootArtist
 
     # If the album is a single download as a track
     if albumAPI['nb_tracks'] == 1:
-        return generateTrackItem(dz, albumAPI['tracks']['data'][0]['id'], bitrate, albumAPI=albumAPI)
+        if len(albumAPI['tracks']['data']):
+            return generateTrackItem(dz, albumAPI['tracks']['data'][0]['id'], bitrate, albumAPI=albumAPI)
+        raise GenerationError(f"https://deezer.com/album/{link_id}", "Single has no tracks.")
 
     tracksArray = dz.gw.get_album_tracks(link_id)
 
@@ -116,6 +105,7 @@ def generateAlbumItem(dz, link_id, bitrate, rootArtist=None):
 
 def generatePlaylistItem(dz, link_id, bitrate, playlistAPI=None, playlistTracksAPI=None):
     if not playlistAPI:
+        if not link_id.isdecimal(): raise InvalidID(f"https://deezer.com/playlist/{link_id}")
         # Get essential playlist info
         try:
             playlistAPI = dz.api.get_playlist(link_id)
@@ -127,15 +117,12 @@ def generatePlaylistItem(dz, link_id, bitrate, playlistAPI=None, playlistTracksA
                 userPlaylist = dz.gw.get_playlist_page(link_id)
                 playlistAPI = map_user_playlist(userPlaylist['DATA'])
             except GWAPIError as e:
-                message = "Wrong URL"
-                # TODO: FIX
-                # if "DATA_ERROR" in e: message += f": {e['DATA_ERROR']}"
-                raise GenerationError("https://deezer.com/playlist/"+str(link_id), message) from e
+                raise GenerationError(f"https://deezer.com/playlist/{link_id}", str(e)) from e
 
         # Check if private playlist and owner
         if not playlistAPI.get('public', False) and playlistAPI['creator']['id'] != str(dz.current_user['id']):
             logger.warning("You can't download others private playlists.")
-            raise GenerationError("https://deezer.com/playlist/"+str(link_id), "You can't download others private playlists.", "notYourPrivatePlaylist")
+            raise NotYourPrivatePlaylist(f"https://deezer.com/playlist/{link_id}")
 
     if not playlistTracksAPI:
         playlistTracksAPI = dz.gw.get_playlist_tracks(link_id)
@@ -168,73 +155,82 @@ def generatePlaylistItem(dz, link_id, bitrate, playlistAPI=None, playlistTracksA
         }
     })
 
-def generateArtistItem(dz, link_id, bitrate, interface=None):
+def generateArtistItem(dz, link_id, bitrate, listener=None):
+    if not link_id.isdecimal(): raise InvalidID(f"https://deezer.com/artist/{link_id}")
     # Get essential artist info
     try:
         artistAPI = dz.api.get_artist(link_id)
     except APIError as e:
-        raise GenerationError("https://deezer.com/artist/"+str(link_id), f"Wrong URL: {e}") from e
+        raise GenerationError(f"https://deezer.com/artist/{link_id}", str(e)) from e
 
     rootArtist = {
         'id': artistAPI['id'],
-        'name': artistAPI['name']
+        'name': artistAPI['name'],
+        'picture_small': artistAPI['picture_small']
     }
-    if interface: interface.send("startAddingArtist", rootArtist)
+    if listener: listener.send("startAddingArtist", rootArtist)
 
     artistDiscographyAPI = dz.gw.get_artist_discography_tabs(link_id, 100)
     allReleases = artistDiscographyAPI.pop('all', [])
     albumList = []
     for album in allReleases:
-        albumList.append(generateAlbumItem(dz, album['id'], bitrate, rootArtist=rootArtist))
+        try:
+            albumList.append(generateAlbumItem(dz, album['id'], bitrate, rootArtist=rootArtist))
+        except GenerationError as e:
+            logger.warning("Album %s has no data: %s", str(album['id']), str(e))
 
-    if interface: interface.send("finishAddingArtist", rootArtist)
+    if listener: listener.send("finishAddingArtist", rootArtist)
     return albumList
 
-def generateArtistDiscographyItem(dz, link_id, bitrate, interface=None):
+def generateArtistDiscographyItem(dz, link_id, bitrate, listener=None):
+    if not link_id.isdecimal(): raise InvalidID(f"https://deezer.com/artist/{link_id}/discography")
     # Get essential artist info
     try:
         artistAPI = dz.api.get_artist(link_id)
     except APIError as e:
-        e = str(e)
-        raise GenerationError("https://deezer.com/artist/"+str(link_id)+"/discography", f"Wrong URL: {e}")
+        raise GenerationError(f"https://deezer.com/artist/{link_id}/discography", str(e)) from e
 
     rootArtist = {
         'id': artistAPI['id'],
-        'name': artistAPI['name']
+        'name': artistAPI['name'],
+        'picture_small': artistAPI['picture_small']
     }
-    if interface: interface.send("startAddingArtist", rootArtist)
+    if listener: listener.send("startAddingArtist", rootArtist)
 
     artistDiscographyAPI = dz.gw.get_artist_discography_tabs(link_id, 100)
     artistDiscographyAPI.pop('all', None) # all contains albums and singles, so its all duplicates. This removes them
     albumList = []
     for releaseType in artistDiscographyAPI:
         for album in artistDiscographyAPI[releaseType]:
-            albumList.append(generateAlbumItem(dz, album['id'], bitrate, rootArtist=rootArtist))
+            try:
+                albumList.append(generateAlbumItem(dz, album['id'], bitrate, rootArtist=rootArtist))
+            except GenerationError as e:
+                logger.warning("Album %s has no data: %s", str(album['id']), str(e))
 
-    if interface: interface.send("finishAddingArtist", rootArtist)
+    if listener: listener.send("finishAddingArtist", rootArtist)
     return albumList
 
-def generateArtistTopItem(dz, link_id, bitrate, interface=None):
+def generateArtistTopItem(dz, link_id, bitrate):
+    if not link_id.isdecimal(): raise InvalidID(f"https://deezer.com/artist/{link_id}/top_track")
     # Get essential artist info
     try:
         artistAPI = dz.api.get_artist(link_id)
     except APIError as e:
-        e = str(e)
-        raise GenerationError("https://deezer.com/artist/"+str(link_id)+"/top_track", f"Wrong URL: {e}")
+        raise GenerationError(f"https://deezer.com/artist/{link_id}/top_track", str(e)) from e
 
     # Emulate the creation of a playlist
     # Can't use generatePlaylistItem directly as this is not a real playlist
     playlistAPI = {
-        'id': str(artistAPI['id'])+"_top_track",
-        'title': artistAPI['name']+" - Top Tracks",
-        'description': "Top Tracks for "+artistAPI['name'],
+        'id':f"{artistAPI['id']}_top_track",
+        'title': f"{artistAPI['name']} - Top Tracks",
+        'description': f"Top Tracks for {artistAPI['name']}",
         'duration': 0,
         'public': True,
         'is_loved_track': False,
         'collaborative': False,
         'nb_tracks': 0,
         'fans': artistAPI['nb_fan'],
-        'link': "https://www.deezer.com/artist/"+str(artistAPI['id'])+"/top_track",
+        'link': f"https://www.deezer.com/artist/{artistAPI['id']}/top_track",
         'share': None,
         'picture': artistAPI['picture'],
         'picture_small': artistAPI['picture_small'],
@@ -242,10 +238,10 @@ def generateArtistTopItem(dz, link_id, bitrate, interface=None):
         'picture_big': artistAPI['picture_big'],
         'picture_xl': artistAPI['picture_xl'],
         'checksum': None,
-        'tracklist': "https://api.deezer.com/artist/"+str(artistAPI['id'])+"/top",
+        'tracklist': f"https://api.deezer.com/artist/{artistAPI['id']}/top",
         'creation_date': "XXXX-00-00",
         'creator': {
-            'id': "art_"+str(artistAPI['id']),
+            'id': f"art_{artistAPI['id']}",
             'name': artistAPI['name'],
             'type': "user"
         },
@@ -254,3 +250,45 @@ def generateArtistTopItem(dz, link_id, bitrate, interface=None):
 
     artistTopTracksAPI_gw = dz.gw.get_artist_toptracks(link_id)
     return generatePlaylistItem(dz, playlistAPI['id'], bitrate, playlistAPI=playlistAPI, playlistTracksAPI=artistTopTracksAPI_gw)
+
+class GenerationError(Exception):
+    def __init__(self, link, message, errid=None):
+        super().__init__()
+        self.link = link
+        self.message = message
+        self.errid = errid
+
+    def toDict(self):
+        return {
+            'link': self.link,
+            'error': self.message,
+            'errid': self.errid
+        }
+
+class ISRCnotOnDeezer(GenerationError):
+    def __init__(self, link):
+        super().__init__(link, "Track ISRC is not available on deezer", "ISRCnotOnDeezer")
+
+class NotYourPrivatePlaylist(GenerationError):
+    def __init__(self, link):
+        super().__init__(link, "You can't download others private playlists.", "notYourPrivatePlaylist")
+
+class TrackNotOnDeezer(GenerationError):
+    def __init__(self, link):
+        super().__init__(link, "Track not found on deezer!", "trackNotOnDeezer")
+
+class AlbumNotOnDeezer(GenerationError):
+    def __init__(self, link):
+        super().__init__(link, "Album not found on deezer!", "albumNotOnDeezer")
+
+class InvalidID(GenerationError):
+    def __init__(self, link):
+        super().__init__(link, "Link ID is invalid!", "invalidID")
+
+class LinkNotSupported(GenerationError):
+    def __init__(self, link):
+        super().__init__(link, "Link is not supported.", "unsupportedURL")
+
+class LinkNotRecognized(GenerationError):
+    def __init__(self, link):
+        super().__init__(link, "Link is not recognized.", "invalidURL")

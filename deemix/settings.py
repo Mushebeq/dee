@@ -20,7 +20,7 @@ class FeaturesOption():
     MOVE_TITLE = "2" # Move to track title
 
 DEFAULTS = {
-  "downloadLocation": "",
+  "downloadLocation": localpaths.getMusicFolder(),
   "tracknameTemplate": "%artist% - %title%",
   "albumTracknameTemplate": "%tracknumber% - %title%",
   "playlistTracknameTemplate": "%position% - %artist% - %title%",
@@ -100,26 +100,26 @@ DEFAULTS = {
   }
 }
 
-def saveSettings(settings, configFolder=None):
+def save(settings, configFolder=None):
     configFolder = Path(configFolder or localpaths.getConfigFolder())
     makedirs(configFolder, exist_ok=True) # Create config folder if it doesn't exsist
 
     with open(configFolder / 'config.json', 'w') as configFile:
         json.dump(settings, configFile, indent=2)
 
-def loadSettings(configFolder=None):
+def load(configFolder=None):
     configFolder = Path(configFolder or localpaths.getConfigFolder())
     makedirs(configFolder, exist_ok=True) # Create config folder if it doesn't exsist
-    if not (configFolder / 'config.json').is_file(): saveSettings(DEFAULTS, configFolder) # Create config file if it doesn't exsist
+    if not (configFolder / 'config.json').is_file(): save(DEFAULTS, configFolder) # Create config file if it doesn't exsist
 
     # Read config file
     with open(configFolder / 'config.json', 'r') as configFile:
         settings = json.load(configFile)
 
-    if checkSettings(settings) > 0: saveSettings(settings) # Check the settings and save them if something changed
+    if check(settings) > 0: save(settings, configFolder) # Check the settings and save them if something changed
     return settings
 
-def checkSettings(settings):
+def check(settings):
     changes = 0
     for i_set in DEFAULTS:
         if not i_set in settings or not isinstance(settings[i_set], DEFAULTS[i_set]):

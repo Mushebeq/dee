@@ -2,6 +2,12 @@ import string
 from deezer import TrackFormats
 import os
 
+USER_AGENT_HEADER = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " \
+                    "Chrome/79.0.3945.130 Safari/537.36"
+
+def canWrite(folder):
+    return os.access(folder, os.W_OK)
+
 def generateReplayGainString(trackGain):
     return "{0:.2f} dB".format((float(trackGain) + 18.4) * -1)
 
@@ -67,11 +73,3 @@ def removeDuplicateArtists(artist, artists):
     for role in artist.keys():
         artist[role] = uniqueArray(artist[role])
     return (artist, artists)
-
-def checkFolder(folder):
-    try:
-        os.makedirs(folder, exist_ok=True)
-    except Exception as e:
-        print(str(e))
-        return False
-    return os.access(folder, os.W_OK)

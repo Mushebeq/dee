@@ -1,12 +1,9 @@
 class Picture:
-    def __init__(self, md5="", pic_type="", url=None):
+    def __init__(self, md5="", pic_type=""):
         self.md5 = md5
         self.type = pic_type
-        self.staticUrl = url
 
-    def generatePictureURL(self, size, pic_format):
-        if self.staticUrl: return self.staticUrl
-
+    def getURL(self, size, pic_format):
         url = "https://e-cdns-images.dzcdn.net/images/{}/{}/{size}x{size}".format(
             self.type,
             self.md5,
@@ -23,3 +20,10 @@ class Picture:
             return url + '-none-100-0-0.png'
 
         return url+'.jpg'
+
+class StaticPicture:
+    def __init__(self, url):
+        self.staticURL = url
+
+    def getURL(self):
+        return self.staticURL

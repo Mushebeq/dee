@@ -26,14 +26,14 @@ class Track:
         self.duration = 0
         self.fallbackID = "0"
         self.filesizes = {}
-        self.localTrack = False
+        self.local = False
         self.mainArtist = None
         self.artist = {"Main": []}
         self.artists = []
         self.album = None
         self.trackNumber = "0"
         self.discNumber = "0"
-        self.date = None
+        self.date = Date()
         self.lyrics = None
         self.bpm = 0
         self.contributors = {}
@@ -64,7 +64,7 @@ class Track:
         self.fallbackID = "0"
         if 'FALLBACK' in trackAPI_gw:
             self.fallbackID = trackAPI_gw['FALLBACK']['SNG_ID']
-        self.localTrack = int(self.id) < 0
+        self.local = int(self.id) < 0
 
     def retriveFilesizes(self, dz):
         guest_sid = dz.session.cookies.get('sid')
@@ -87,8 +87,8 @@ class Track:
             sleep(2)
             self.retriveFilesizes(dz)
         if len(result_json['error']):
-            raise APIError(result_json.dumps(result_json['error']))
-        response = result_json.get("results")
+            raise TrackError(result_json.dumps(result_json['error']))
+        response = result_json.get("results", {})
         filesizes = {}
         for key, value in response.items():
             if key.startswith("FILESIZE_"):
@@ -96,8 +96,8 @@ class Track:
                 filesizes[key+"_TESTED"] = False
         self.filesizes = filesizes
 
-    def parseData(self, dz, id=None, trackAPI_gw=None, trackAPI=None, albumAPI_gw=None, albumAPI=None, playlistAPI=None):
-        if id and not trackAPI_gw: trackAPI_gw = dz.gw.get_track_with_fallback(id)
+    def parseData(self, dz, track_id=None, trackAPI_gw=None, trackAPI=None, albumAPI_gw=None, albumAPI=None, playlistAPI=None):
+        if track_id and not trackAPI_gw: trackAPI_gw = dz.gw.get_track_with_fallback(track_id)
         elif not trackAPI_gw: raise NoDataToParse
         if not trackAPI:
             try: trackAPI = dz.api.get_track(trackAPI_gw['SNG_ID'])
@@ -105,7 +105,7 @@ class Track:
 
         self.parseEssentialData(trackAPI_gw, trackAPI)
 
-        if self.localTrack:
+        if self.local:
             self.parseLocalTrackData(trackAPI_gw)
         else:
             self.retriveFilesizes(dz)
@@ -147,6 +147,7 @@ class Track:
                 raise AlbumDoesntExists
 
             # Fill missing data
+            if albumAPI_gw: self.album.addExtraAlbumGWData(albumAPI_gw)
             if self.album.date and not self.date: self.date = self.album.date
             if not self.album.discTotal: self.album.discTotal = albumAPI_gw.get('NUMBER_DISK', "1")
             if not self.copyright: self.copyright = albumAPI_gw['COPYRIGHT']
@@ -157,10 +158,9 @@ class Track:
         self.title = ' '.join(self.title.split())
 
         # Make sure there is at least one artist
-        if not len(self.artist['Main']):
+        if len(self.artist['Main']) == 0:
             self.artist['Main'] = [self.mainArtist['name']]
 
-        self.singleDownload = trackAPI_gw.get('SINGLE_TRACK', False) # TODO: Change
         self.position = trackAPI_gw.get('POSITION')
 
         # Add playlist data if track is in a playlist
@@ -178,12 +178,11 @@ class Track:
             md5 = trackAPI_gw.get('ALB_PICTURE', ""),
             pic_type = "cover"
         )
-        self.mainArtist = Artist(name=trackAPI_gw['ART_NAME'])
+        self.mainArtist = Artist(name=trackAPI_gw['ART_NAME'], role="Main")
         self.artists = [trackAPI_gw['ART_NAME']]
         self.artist = {
             'Main': [trackAPI_gw['ART_NAME']]
         }
-        self.date = Date()
         self.album.artist = self.artist
         self.album.artists = self.artists
         self.album.date = self.date
@@ -207,14 +206,15 @@ class Track:
         self.mainArtist = Artist(
             art_id = trackAPI_gw['ART_ID'],
             name = trackAPI_gw['ART_NAME'],
+            role = "Main",
             pic_md5 = trackAPI_gw.get('ART_PICTURE')
         )
 
         if 'PHYSICAL_RELEASE_DATE' in trackAPI_gw:
-            day = trackAPI_gw["PHYSICAL_RELEASE_DATE"][8:10]
-            month = trackAPI_gw["PHYSICAL_RELEASE_DATE"][5:7]
-            year = trackAPI_gw["PHYSICAL_RELEASE_DATE"][0:4]
-            self.date = Date(day, month, year)
+            self.date.day = trackAPI_gw["PHYSICAL_RELEASE_DATE"][8:10]
+            self.date.month = trackAPI_gw["PHYSICAL_RELEASE_DATE"][5:7]
+            self.date.year = trackAPI_gw["PHYSICAL_RELEASE_DATE"][0:4]
+            self.date.fixDayMonth()
 
     def parseTrack(self, trackAPI):
         self.bpm = trackAPI['bpm']
@@ -249,7 +249,7 @@ class Track:
         return removeFeatures(self.title)
 
     def getFeatTitle(self):
-        if self.featArtistsString and not "feat." in self.title.lower():
+        if self.featArtistsString and "feat." not in self.title.lower():
             return f"{self.title} ({self.featArtistsString})"
         return self.title
 
@@ -259,26 +259,15 @@ class Track:
         if 'Featured' in self.artist:
             self.featArtistsString = "feat. "+andCommaConcat(self.artist['Featured'])
 
-    def applySettings(self, settings, TEMPDIR, embeddedImageFormat):
+    def applySettings(self, settings):
 
         # Check if should save the playlist as a compilation
         if self.playlist and settings['tags']['savePlaylistAsCompilation']:
             self.trackNumber = self.position
             self.discNumber = "1"
             self.album.makePlaylistCompilation(self.playlist)
-            self.album.embeddedCoverURL = self.playlist.pic.generatePictureURL(settings['embeddedArtworkSize'], embeddedImageFormat)
-
-            ext = self.album.embeddedCoverURL[-4:]
-            if ext[0] != ".": ext = ".jpg" # Check for Spotify images
-
-            # TODO: FIX
-            # self.album.embeddedCoverPath = TEMPDIR / f"pl{trackAPI_gw['_EXTRA_PLAYLIST']['id']}_{settings['embeddedArtworkSize']}{ext}"
         else:
             if self.album.date: self.date = self.album.date
-            self.album.embeddedCoverURL = self.album.pic.generatePictureURL(settings['embeddedArtworkSize'], embeddedImageFormat)
-
-            ext = self.album.embeddedCoverURL[-4:]
-            self.album.embeddedCoverPath = TEMPDIR / f"alb{self.album.id}_{settings['embeddedArtworkSize']}{ext}"
 
         self.dateString = self.date.format(settings['dateFormat'])
         self.album.dateString = self.album.date.format(settings['dateFormat'])
@@ -311,9 +300,8 @@ class Track:
             self.album.title = self.album.getCleanTitle()
 
         # Remove (Album Version) from tracks that have that
-        if settings['removeAlbumVersion']:
-            if "Album Version" in self.title:
-                self.title = re.sub(r' ?\(Album Version\)', "", self.title).strip()
+        if settings['removeAlbumVersion'] and "Album Version" in self.title:
+            self.title = re.sub(r' ?\(Album Version\)', "", self.title).strip()
 
         # Change Title and Artists casing if needed
         if settings['titleCasing'] != "nothing":

@@ -19,6 +19,6 @@ class Lyrics:
                 else:
                     notEmptyLine = line + 1
                     while syncLyricsJson[notEmptyLine]["line"] == "":
-                        notEmptyLine = notEmptyLine + 1
+                        notEmptyLine += 1
                     timestamp = syncLyricsJson[notEmptyLine]["lrc_timestamp"]
                 self.sync += timestamp + syncLyricsJson[line]["line"] + "\r\n"

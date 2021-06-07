@@ -1,5 +1,5 @@
 class IDownloadObject:
-    """DownloadObject interface"""
+    """DownloadObject Interface"""
     def __init__(self, obj):
         self.type = obj['type']
         self.id = obj['id']
@@ -16,7 +16,6 @@ class IDownloadObject:
         self.files = obj.get('files', [])
         self.progressNext = 0
         self.uuid = f"{self.type}_{self.id}_{self.bitrate}"
-        self.ack = None
         self.__type__ = None
 
     def toDict(self):
@@ -35,7 +34,6 @@ class IDownloadObject:
             'progress': self.progress,
             'errors': self.errors,
             'files': self.files,
-            'ack': self.ack,
             '__type__': self.__type__
         }
 
@@ -50,16 +48,29 @@ class IDownloadObject:
 
     def getSlimmedDict(self):
         light = self.toDict()
-        propertiesToDelete = ['single', 'collection', 'convertable']
+        propertiesToDelete = ['single', 'collection', 'plugin', 'conversion_data']
         for prop in propertiesToDelete:
             if prop in light:
                 del light[prop]
         return light
 
-    def updateProgress(self, interface=None):
+    def getEssentialDict(self):
+        return {
+            'type': self.type,
+            'id': self.id,
+            'bitrate': self.bitrate,
+            'uuid': self.uuid,
+            'title': self.title,
+            'artist': self.artist,
+            'cover': self.cover,
+            'explicit': self.explicit,
+            'size': self.size
+        }
+
+    def updateProgress(self, listener=None):
         if round(self.progressNext) != self.progress and round(self.progressNext) % 2 == 0:
             self.progress = round(self.progressNext)
-            if interface: interface.send("updateQueue", {'uuid': self.uuid, 'progress': self.progress})
+            if listener: listener.send("updateQueue", {'uuid': self.uuid, 'progress': self.progress})
 
 class Single(IDownloadObject):
     def __init__(self, obj):
@@ -73,13 +84,13 @@ class Single(IDownloadObject):
         item['single'] = self.single
         return item
 
-    def completeTrackProgress(self, interface=None):
+    def completeTrackProgress(self, listener=None):
         self.progressNext = 100
-        self.updateProgress(interface)
+        self.updateProgress(listener)
 
-    def removeTrackProgress(self, interface=None):
+    def removeTrackProgress(self, listener=None):
         self.progressNext = 0
-        self.updateProgress(interface)
+        self.updateProgress(listener)
 
 class Collection(IDownloadObject):
     def __init__(self, obj):
@@ -92,13 +103,13 @@ class Collection(IDownloadObject):
         item['collection'] = self.collection
         return item
 
-    def completeTrackProgress(self, interface=None):
+    def completeTrackProgress(self, listener=None):
         self.progressNext += (1 / self.size) * 100
-        self.updateProgress(interface)
+        self.updateProgress(listener)
 
-    def removeTrackProgress(self, interface=None):
+    def removeTrackProgress(self, listener=None):
         self.progressNext -= (1 / self.size) * 100
-        self.updateProgress(interface)
+        self.updateProgress(listener)
 
 class Convertable(Collection):
     def __init__(self, obj):

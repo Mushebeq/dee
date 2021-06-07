@@ -6,7 +6,7 @@ from deezer import Deezer
 from deezer import TrackFormats
 
 from deemix import generateDownloadObject
-from deemix.settings import loadSettings
+from deemix.settings import load as loadSettings
 from deemix.utils import getBitrateNumberFromText
 import deemix.utils.localpaths as localpaths
 from deemix.downloader import Downloader
@@ -62,7 +62,7 @@ def download(url, bitrate, portable, path):
     # If first url is filepath readfile and use them as URLs
     try:
         isfile = Path(url[0]).is_file()
-    except:
+    except Exception:
         isfile = False
     if isfile:
         filename = url[0]

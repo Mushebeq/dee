@@ -2,11 +2,16 @@
 import re
 from urllib.request import urlopen
 
-from deemix.itemgen import generateTrackItem, generateAlbumItem, generatePlaylistItem, generateArtistItem, generateArtistDiscographyItem, generateArtistTopItem
+from deemix.itemgen import generateTrackItem, \
+    generateAlbumItem, \
+    generatePlaylistItem, \
+    generateArtistItem, \
+    generateArtistDiscographyItem, \
+    generateArtistTopItem, \
+    LinkNotRecognized, \
+    LinkNotSupported
 
-__version__ = "2.0.16"
-USER_AGENT_HEADER = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " \
-                    "Chrome/79.0.3945.130 Safari/537.36"
+__version__ = "3.0.0"
 
 # Returns the Resolved URL, the Type and the ID
 def parseLink(link):
@@ -42,11 +47,20 @@ def parseLink(link):
 
     return (link, link_type, link_id)
 
-def generateDownloadObject(dz, link, bitrate):
+def generateDownloadObject(dz, link, bitrate, plugins=None, listener=None):
     (link, link_type, link_id) = parseLink(link)
 
     if link_type is None or link_id is None:
-        return None
+        if plugins is None: plugins = {}
+        plugin_names = plugins.keys()
+        current_plugin = None
+        item = None
+        for plugin in plugin_names:
+            current_plugin = plugins[plugin]
+            item = current_plugin.generateDownloadObject(dz, link, bitrate, listener)
+            if item: return item
+        raise LinkNotRecognized(link)
+
     if link_type == "track":
         return generateTrackItem(dz, link_id, bitrate)
     if link_type == "album":
@@ -54,10 +68,10 @@ def generateDownloadObject(dz, link, bitrate):
     if link_type == "playlist":
         return generatePlaylistItem(dz, link_id, bitrate)
     if link_type == "artist":
-        return generateArtistItem(dz, link_id, bitrate)
+        return generateArtistItem(dz, link_id, bitrate, listener)
     if link_type == "artist_discography":
-        return generateArtistDiscographyItem(dz, link_id, bitrate)
+        return generateArtistDiscographyItem(dz, link_id, bitrate, listener)
     if link_type == "artist_top":
         return generateArtistTopItem(dz, link_id, bitrate)
 
-    return None
+    raise LinkNotSupported(link)

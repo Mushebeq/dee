@@ -1,6 +1,6 @@
 from deemix.types.Artist import Artist
 from deemix.types.Date import Date
-from deemix.types.Picture import Picture
+from deemix.types.Picture import Picture, StaticPicture
 
 class Playlist:
     def __init__(self, playlistAPI):
@@ -30,20 +30,17 @@ class Playlist:
             picType = url[url.find('images/')+7:]
             picType = picType[:picType.find('/')]
             md5 = url[url.find(picType+'/') + len(picType)+1:-24]
-            self.pic = Picture(
-                md5 = md5,
-                pic_type = picType
-            )
+            self.pic = Picture(md5, picType)
         else:
-            self.pic = Picture(url = playlistAPI['picture_xl'])
+            self.pic = StaticPicture(playlistAPI['picture_xl'])
 
         if 'various_artist' in playlistAPI:
             pic_md5 = playlistAPI['various_artist']['picture_small']
             pic_md5 = pic_md5[pic_md5.find('artist/') + 7:-24]
             self.variousArtists = Artist(
-                art_id = playlistAPI['various_artist']['id'],
-                name = playlistAPI['various_artist']['name'],
-                role = "Main",
-                pic_md5 = pic_md5
+                playlistAPI['various_artist']['id'],
+                playlistAPI['various_artist']['name'],
+                "Main",
+                pic_md5
             )
             self.mainArtist = self.variousArtists
