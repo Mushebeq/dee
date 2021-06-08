@@ -373,6 +373,10 @@ class Downloader:
 
     def downloadWrapper(self, extraData, track=None):
         trackAPI_gw = extraData['trackAPI_gw']
+        if ('_EXTRA_TRACK' in trackAPI_gw):
+            extraData['trackAPI'] = trackAPI_gw['_EXTRA_TRACK'].copy()
+            del extraData['trackAPI_gw']['_EXTRA_TRACK']
+            del trackAPI_gw['_EXTRA_TRACK']
         # Temp metadata to generate logs
         tempTrack = {
             'id': trackAPI_gw['SNG_ID'],
