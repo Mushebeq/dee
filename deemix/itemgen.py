@@ -49,12 +49,25 @@ def generateTrackItem(dz, link_id, bitrate, trackAPI=None, albumAPI=None):
 
 def generateAlbumItem(dz, link_id, bitrate, rootArtist=None):
     # Get essential album info
-    try:
-        albumAPI = dz.api.get_album(link_id)
-    except APIError as e:
-        raise GenerationError(f"https://deezer.com/album/{link_id}", str(e)) from e
+    if str(link_id).startswith('upc'):
+        upcs = [link_id[4:],]
+        upcs.append(int(upcs[0]))
+        lastError = None
+        for upc in upcs:
+            try:
+                albumAPI = dz.api.get_album(f"upc:{upc}")
+            except APIError as e:
+                lastError = e
+                albumAPI = None
+        if not albumAPI:
+            raise GenerationError(f"https://deezer.com/album/{link_id}", str(lastError)) from lastError
+        link_id = albumAPI['id']
+    else:
+        try:
+            albumAPI = dz.api.get_album(link_id)
+        except APIError as e:
+            raise GenerationError(f"https://deezer.com/album/{link_id}", str(e)) from e
 
-    if str(link_id).startswith('upc'): link_id = albumAPI['id']
     if not link_id.isdecimal(): raise InvalidID(f"https://deezer.com/album/{link_id}")
 
     # Get extra info about album
