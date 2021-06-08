@@ -150,32 +150,31 @@ class Downloader:
         self.playlistURLs = []
 
     def start(self):
-        if self.downloadObject.isCanceled:
+        if not self.downloadObject.isCanceled:
+            if isinstance(self.downloadObject, Single):
+                track = self.downloadWrapper({
+                    'trackAPI_gw': self.downloadObject.single['trackAPI_gw'],
+                    'trackAPI': self.downloadObject.single['trackAPI'],
+                    'albumAPI': self.downloadObject.single['albumAPI']
+                })
+                if track: self.afterDownloadSingle(track)
+            elif isinstance(self.downloadObject, Collection):
+                tracks = [None] * len(self.downloadObject.collection['tracks_gw'])
+                with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
+                    for pos, track in enumerate(self.downloadObject.collection['tracks_gw'], start=0):
+                        tracks[pos] = executor.submit(self.downloadWrapper, {
+                            'trackAPI_gw': track,
+                            'albumAPI': self.downloadObject.collection['albumAPI'],
+                            'playlistAPI': self.downloadObject.collection['playlistAPI']
+                        })
+                self.afterDownloadCollection(tracks)
+
+        if self.listener:
             if self.listener:
                 self.listener.send('currentItemCancelled', self.downloadObject.uuid)
                 self.listener.send("removedFromQueue", self.downloadObject.uuid)
-            return
-
-        if isinstance(self.downloadObject, Single):
-            track = self.downloadWrapper({
-                'trackAPI_gw': self.downloadObject.single['trackAPI_gw'],
-                'trackAPI': self.downloadObject.single['trackAPI'],
-                'albumAPI': self.downloadObject.single['albumAPI']
-            })
-            if track: self.afterDownloadSingle(track)
-        elif isinstance(self.downloadObject, Collection):
-            tracks = [None] * len(self.downloadObject.collection['tracks_gw'])
-            with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
-                for pos, track in enumerate(self.downloadObject.collection['tracks_gw'], start=0):
-                    tracks[pos] = executor.submit(self.downloadWrapper, {
-                        'trackAPI_gw': track,
-                        'albumAPI': self.downloadObject.collection['albumAPI'],
-                        'playlistAPI': self.downloadObject.collection['playlistAPI']
-                    })
-            self.afterDownloadCollection(tracks)
-
-        if self.listener:
-            self.listener.send("finishDownload", self.downloadObject.uuid)
+            else:
+                self.listener.send("finishDownload", self.downloadObject.uuid)
 
     def download(self, extraData, track=None):
         returnData = {}
