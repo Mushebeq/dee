@@ -154,8 +154,8 @@ class Downloader:
             if isinstance(self.downloadObject, Single):
                 track = self.downloadWrapper({
                     'trackAPI_gw': self.downloadObject.single['trackAPI_gw'],
-                    'trackAPI': self.downloadObject.single['trackAPI'],
-                    'albumAPI': self.downloadObject.single['albumAPI']
+                    'trackAPI': self.downloadObject.single.get('trackAPI'),
+                    'albumAPI': self.downloadObject.single.get('albumAPI')
                 })
                 if track: self.afterDownloadSingle(track)
             elif isinstance(self.downloadObject, Collection):
@@ -164,8 +164,8 @@ class Downloader:
                     for pos, track in enumerate(self.downloadObject.collection['tracks_gw'], start=0):
                         tracks[pos] = executor.submit(self.downloadWrapper, {
                             'trackAPI_gw': track,
-                            'albumAPI': self.downloadObject.collection['albumAPI'],
-                            'playlistAPI': self.downloadObject.collection['playlistAPI']
+                            'albumAPI': self.downloadObject.collection.get('albumAPI'),
+                            'playlistAPI': self.downloadObject.collection.get('playlistAPI')
                         })
                 self.afterDownloadCollection(tracks)
 
@@ -179,9 +179,9 @@ class Downloader:
     def download(self, extraData, track=None):
         returnData = {}
         trackAPI_gw = extraData['trackAPI_gw']
-        trackAPI = extraData['trackAPI']
-        albumAPI = extraData['albumAPI']
-        playlistAPI = extraData['playlistAPI']
+        trackAPI = extraData.get('trackAPI')
+        albumAPI = extraData.get('albumAPI')
+        playlistAPI = extraData.get('playlistAPI')
         if self.downloadObject.isCanceled: raise DownloadCanceled
         if trackAPI_gw['SNG_ID'] == "0": raise DownloadFailed("notOnDeezer")
 
@@ -327,6 +327,8 @@ class Downloader:
             try:
                 with open(writepath, 'wb') as stream:
                     streamTrack(stream, track, downloadObject=self.downloadObject, listener=self.listener)
+            except requests.exceptions.HTTPError as e:
+                raise DownloadFailed('notAvailable', track) from e
             except OSError as e:
                 if writepath.is_file(): writepath.unlink()
                 if e.errno == errno.ENOSPC: raise DownloadFailed("noSpaceLeft") from e
@@ -386,7 +388,7 @@ class Downloader:
         if trackAPI_gw.get('VERSION') and trackAPI_gw['VERSION'] not in trackAPI_gw['SNG_TITLE']:
             tempTrack['title'] += f" {trackAPI_gw['VERSION']}".strip()
 
-        itemName = f"[{track.mainArtist.name} - {track.title}]"
+        itemName = f"[{tempTrack['artist']} - {tempTrack['title']}]"
 
         try:
             result = self.download(extraData, track)

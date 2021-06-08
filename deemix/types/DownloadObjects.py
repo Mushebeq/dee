@@ -8,7 +8,7 @@ class IDownloadObject:
         self.artist = obj['artist']
         self.cover = obj['cover']
         self.explicit = obj.get('explicit', False)
-        self.size = obj['size']
+        self.size = obj.get('size', 0)
         self.downloaded = obj.get('downloaded', 0)
         self.failed = obj.get('failed', 0)
         self.progress = obj.get('progress', 0)
@@ -16,6 +16,7 @@ class IDownloadObject:
         self.files = obj.get('files', [])
         self.progressNext = 0
         self.uuid = f"{self.type}_{self.id}_{self.bitrate}"
+        self.isCanceled = False
         self.__type__ = None
 
     def toDict(self):

@@ -11,7 +11,7 @@ class Lyrics:
             syncLyricsJson = lyricsAPI["LYRICS_SYNC_JSON"]
             timestamp = ""
             milliseconds = 0
-            for line in enumerate(syncLyricsJson):
+            for line, _ in enumerate(syncLyricsJson):
                 if syncLyricsJson[line]["line"] != "":
                     timestamp = syncLyricsJson[line]["lrc_timestamp"]
                     milliseconds = int(syncLyricsJson[line]["milliseconds"])

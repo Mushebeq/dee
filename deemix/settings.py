@@ -20,7 +20,7 @@ class FeaturesOption():
     MOVE_TITLE = "2" # Move to track title
 
 DEFAULTS = {
-  "downloadLocation": localpaths.getMusicFolder(),
+  "downloadLocation": str(localpaths.getMusicFolder()),
   "tracknameTemplate": "%artist% - %title%",
   "albumTracknameTemplate": "%tracknumber% - %title%",
   "playlistTracknameTemplate": "%position% - %artist% - %title%",
@@ -122,11 +122,11 @@ def load(configFolder=None):
 def check(settings):
     changes = 0
     for i_set in DEFAULTS:
-        if not i_set in settings or not isinstance(settings[i_set], DEFAULTS[i_set]):
+        if not i_set in settings or not isinstance(settings[i_set], type(DEFAULTS[i_set])):
             settings[i_set] = DEFAULTS[i_set]
             changes += 1
     for i_set in DEFAULTS['tags']:
-        if not i_set in settings['tags'] or not isinstance(settings['tags'][i_set], DEFAULTS['tags'][i_set]):
+        if not i_set in settings['tags'] or not isinstance(settings['tags'][i_set], type(DEFAULTS['tags'][i_set])):
             settings['tags'][i_set] = DEFAULTS['tags'][i_set]
             changes += 1
     if settings['downloadLocation'] == "":

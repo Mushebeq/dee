@@ -74,7 +74,7 @@ def generatePath(track, downloadObject, settings):
     elif downloadObject.type == "album":
         filenameTemplate = settings['albumTracknameTemplate']
     else:
-        filenameTemplate = settings['plyalistTracknameTemplate']
+        filenameTemplate = settings['playlistTracknameTemplate']
 
     filename = generateTrackName(filenameTemplate, track, settings)
 
