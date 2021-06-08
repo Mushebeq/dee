@@ -112,7 +112,7 @@ def getPreferredBitrate(track, bitrate, shouldFallback, uuid=None, listener=None
             return None
 
     for formatNumber, formatName in formats.items():
-        if formatNumber >= int(bitrate): continue
+        if formatNumber > bitrate: continue
         if f"FILESIZE_{formatName}" in track.filesizes:
             if int(track.filesizes[f"FILESIZE_{formatName}"]) != 0: return formatNumber
             if not track.filesizes[f"FILESIZE_{formatName}_TESTED"]:
