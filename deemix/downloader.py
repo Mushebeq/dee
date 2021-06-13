@@ -248,7 +248,7 @@ class Downloader:
 
         # Download and cache coverart
         logger.info("%s Getting the album cover", itemName)
-        track.album.embeddedCoverPath = downloadImage(track.album.embeddedCoverURL, track.album.embeddedCoverPath)
+        track.album.embeddedCoverPath = downloadImage(track.album.embeddedCoverURL, track.album.embeddedCoverPath, self.settings.overwriteFile)
 
         # Save local album art
         if coverPath:
