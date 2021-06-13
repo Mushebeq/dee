@@ -92,7 +92,7 @@ class Track:
         filesizes = {}
         for key, value in response.items():
             if key.startswith("FILESIZE_"):
-                filesizes[key] = value
+                filesizes[key] = int(value)
                 filesizes[key+"_TESTED"] = False
         self.filesizes = filesizes
 

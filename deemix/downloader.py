@@ -105,8 +105,9 @@ def getPreferredBitrate(track, bitrate, shouldFallback, uuid=None, listener=None
         )
         try:
             request.raise_for_status()
-            track.filesizes[f"FILESIZE_{formatName}"] = request.headers["Content-Length"]
+            track.filesizes[f"FILESIZE_{formatName}"] = int(request.headers["Content-Length"])
             track.filesizes[f"FILESIZE_{formatName}_TESTED"] = True
+            if track.filesizes[f"FILESIZE_{formatName}"] == 0: return None
             return formatNumber
         except requests.exceptions.HTTPError: # if the format is not available, Deezer returns a 403 error
             return None
