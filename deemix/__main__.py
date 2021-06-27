@@ -22,7 +22,7 @@ def download(url, bitrate, portable, path):
     configFolder = localpath / 'config' if portable else localpaths.getConfigFolder()
 
     settings = loadSettings(configFolder)
-    dz = Deezer(settings.get('tagsLanguage'))
+    dz = Deezer(settings.get('tagsLanguage', ""))
 
     def requestValidArl():
         while True:
